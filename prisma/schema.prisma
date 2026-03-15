@@ -1,8 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
 generator client {
   provider = "prisma-client"
   output   = "../src/generated/prisma"
@@ -10,4 +5,375 @@ generator client {
 
 datasource db {
   provider = "sqlite"
+}
+
+model User {
+  id               String           @id @default(uuid())
+  email            String           @unique
+  password         String
+  name             String
+  role             String           @default("JUNIOR_ADVOCATE")
+  phone            String?
+  barCouncilNumber String?
+  isActive         Boolean          @default(true)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  sessions         Session[]
+  caseAssignments  CaseAssignment[]
+  draftedNotices   Notice[]         @relation("NoticeDrafter")
+  approvedNotices  Notice[]         @relation("NoticeApprover")
+  noticeApprovals  NoticeApproval[]
+  chatSessions     ChatSession[]
+  auditLogs        AuditLog[]
+  timeEntries      TimeEntry[]
+  assignedSubmissions DocumentSubmission[] @relation("AssignedSubmissions")
+  createdSubmissions  DocumentSubmission[] @relation("CreatedSubmissions")
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model FirmSettings {
+  id                 String   @id @default("default")
+  firmName           String   @default("Legal Practice")
+  address            String?
+  phone              String?
+  email              String?
+  gstin              String?
+  registrationNumber String?
+  letterheadUrl      String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model Client {
+  id           String       @id @default(uuid())
+  name         String
+  email        String?
+  phone        String?
+  address      String?
+  clientType   String       @default("INDIVIDUAL")
+  panNumber    String?
+  aadharNumber String?
+  gstNumber    String?
+  notes        String?
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  caseClients  CaseClient[]
+  notices      Notice[]
+  limitationTrackers LimitationTracker[]
+  timeEntries  TimeEntry[]
+  invoices     Invoice[]
+  documentSubmissions DocumentSubmission[]
+}
+
+model Case {
+  id              String           @id @default(uuid())
+  caseNumber      String           @unique
+  cnrNumber       String?          @unique
+  title           String
+  description     String?
+  caseType        String           @default("CIVIL")
+  courtName       String?
+  courtType       String           @default("DISTRICT_COURT")
+  courtCode       String?
+  stateCode       String?
+  districtCode    String?
+  judge           String?
+  filingDate      DateTime?
+  nextHearingDate DateTime?
+  status          String           @default("ACTIVE")
+  priority        String           @default("MEDIUM")
+  ecourtStatus    String?
+  lastSyncedAt    DateTime?
+  notes           String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  caseClients     CaseClient[]
+  caseAssignments CaseAssignment[]
+  caseEvents      CaseEvent[]
+  documents       Document[]
+  diaryEntries    DiaryEntry[]
+  notices         Notice[]
+  limitationTrackers LimitationTracker[]
+  timeEntries     TimeEntry[]
+  invoices        Invoice[]
+  documentSubmissions DocumentSubmission[]
+}
+
+model CaseClient {
+  id        String   @id @default(uuid())
+  caseId    String
+  clientId  String
+  role      String   @default("PETITIONER")
+  createdAt DateTime @default(now())
+  case      Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([caseId, clientId])
+}
+
+model CaseAssignment {
+  id         String   @id @default(uuid())
+  caseId     String
+  userId     String
+  role       String   @default("ASSOCIATE")
+  assignedAt DateTime @default(now())
+  case       Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([caseId, userId])
+}
+
+model CaseEvent {
+  id          String   @id @default(uuid())
+  caseId      String
+  eventType   String   @default("HEARING")
+  date        DateTime
+  description String?
+  outcome     String?
+  nextDate    DateTime?
+  createdAt   DateTime @default(now())
+  case        Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+}
+
+model Document {
+  id            String          @id @default(uuid())
+  caseId        String?
+  title         String
+  fileName      String
+  filePath      String
+  fileType      String
+  fileSize      Int
+  uploadedBy    String
+  extractedText String?
+  isProcessed   Boolean         @default(false)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  case          Case?           @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  chunks        DocumentChunk[]
+}
+
+model DocumentChunk {
+  id         String   @id @default(uuid())
+  documentId String
+  content    String
+  chunkIndex Int
+  metadata   String?
+  chromaId   String?
+  createdAt  DateTime @default(now())
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+}
+
+model DiaryEntry {
+  id          String    @id @default(uuid())
+  caseId      String
+  date        DateTime
+  courtName   String?
+  caseNumber  String?
+  description String?
+  stage       String?
+  nextDate    DateTime?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  case        Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+}
+
+model ScheduleEvent {
+  id          String    @id @default(uuid())
+  title       String
+  description String?
+  date        DateTime
+  endDate     DateTime?
+  eventType   String    @default("HEARING")
+  caseId      String?
+  isAllDay    Boolean   @default(false)
+  reminder    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model LimitationTracker {
+  id             String    @id @default(uuid())
+  caseId         String?
+  clientId       String?
+  title          String
+  description    String?
+  category       String    @default("GENERAL")
+  accrualDate    DateTime
+  limitationDays Int
+  deadlineDate   DateTime
+  extensionDays  Int       @default(0)
+  extensionReason String?
+  status         String    @default("ACTIVE")
+  alertDays      Int       @default(30)
+  notes          String?
+  createdBy      String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  case           Case?     @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  client         Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+}
+
+model NoticeTemplate {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  category    String?
+  content     String
+  variables   String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  notices     Notice[]
+}
+
+model Notice {
+  id         String           @id @default(uuid())
+  templateId String?
+  caseId     String?
+  clientId   String?
+  title      String
+  content    String
+  status     String           @default("DRAFT")
+  draftedBy  String
+  approvedBy String?
+  sentAt     DateTime?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+  template   NoticeTemplate?  @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  case       Case?            @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  client     Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  drafter    User             @relation("NoticeDrafter", fields: [draftedBy], references: [id])
+  approver   User?            @relation("NoticeApprover", fields: [approvedBy], references: [id])
+  approvals  NoticeApproval[]
+}
+
+model NoticeApproval {
+  id        String   @id @default(uuid())
+  noticeId  String
+  userId    String
+  action    String
+  comments  String?
+  createdAt DateTime @default(now())
+  notice    Notice   @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model ChatSession {
+  id         String        @id @default(uuid())
+  userId     String
+  title      String        @default("New Chat")
+  caseId     String?
+  documentId String?
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages   ChatMessage[]
+}
+
+model ChatMessage {
+  id        String      @id @default(uuid())
+  sessionId String
+  role      String
+  content   String
+  sources   String?
+  createdAt DateTime    @default(now())
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  details   String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+}
+
+model TimeEntry {
+  id          String   @id @default(uuid())
+  userId      String
+  caseId      String?
+  clientId    String?
+  description String
+  date        DateTime
+  hours       Float
+  rate        Float    @default(0)
+  amount      Float    @default(0)
+  isBilled    Boolean  @default(false)
+  invoiceId   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id])
+  case        Case?    @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  client      Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  invoice     Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+}
+
+model Invoice {
+  id             String        @id @default(uuid())
+  invoiceNumber  String        @unique
+  clientId       String
+  caseId         String?
+  subtotal       Float         @default(0)
+  gstRate        Float         @default(18)
+  gstAmount      Float         @default(0)
+  totalAmount    Float         @default(0)
+  status         String        @default("DRAFT")
+  dueDate        DateTime?
+  paidDate       DateTime?
+  notes          String?
+  createdBy      String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  client         Client        @relation(fields: [clientId], references: [id])
+  case           Case?         @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  timeEntries    TimeEntry[]
+  invoiceItems   InvoiceItem[]
+}
+
+model InvoiceItem {
+  id          String  @id @default(uuid())
+  invoiceId   String
+  description String
+  quantity    Float   @default(1)
+  rate        Float
+  amount      Float
+  sacCode     String? @default("998211")
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+}
+
+model DocumentSubmission {
+  id           String    @id @default(uuid())
+  caseId       String?
+  clientId     String?
+  title        String
+  description  String?
+  documentType String    @default("PLEADING")
+  status       String    @default("TODO")
+  priority     String    @default("MEDIUM")
+  dueDate      DateTime?
+  assignedTo   String?
+  courtName    String?
+  remarks      String?
+  sortOrder    Int       @default(0)
+  createdBy    String
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  case         Case?     @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  client       Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  assignee     User?     @relation("AssignedSubmissions", fields: [assignedTo], references: [id], onDelete: SetNull)
+  creator      User      @relation("CreatedSubmissions", fields: [createdBy], references: [id])
 }
