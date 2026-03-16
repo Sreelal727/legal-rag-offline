@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,12 +21,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Phone, Mail, Building2, User } from "lucide-react";
+import { Plus, Search, Phone, Mail, Building2, User, Upload, FileCheck, Loader2, PenLine, Camera, SwitchCamera, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/role-gate";
 import Link from "next/link";
+import { WhatsAppMessageDialog } from "@/components/whatsapp-message-dialog";
 
 const CLIENT_TYPES = ["INDIVIDUAL", "COMPANY", "GOVERNMENT", "OTHER"];
+
+const CLIENT_TYPE_COLORS: Record<string, string> = {
+  INDIVIDUAL: "bg-blue-500 text-white",
+  COMPANY: "bg-emerald-500 text-white",
+  GOVERNMENT: "bg-amber-500 text-white",
+  OTHER: "bg-purple-500 text-white",
+};
 
 interface Client {
   id: string;
@@ -43,11 +51,45 @@ interface Client {
   _count: { caseClients: number };
 }
 
+interface FormState {
+  name: string;
+  clientType: string;
+  email: string;
+  phone: string;
+  address: string;
+  panNumber: string;
+  aadharNumber: string;
+  gstNumber: string;
+  notes: string;
+}
+
+const emptyForm: FormState = {
+  name: "",
+  clientType: "INDIVIDUAL",
+  email: "",
+  phone: "",
+  address: "",
+  panNumber: "",
+  aadharNumber: "",
+  gstNumber: "",
+  notes: "",
+};
+
 export default function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [scanning, setScanning] = useState(false);
+  const [form, setForm] = useState<FormState>({ ...emptyForm });
+  const [scanResult, setScanResult] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const fileCameraRearRef = useRef<HTMLInputElement>(null);
+  const fileCameraFrontRef = useRef<HTMLInputElement>(null);
+  const handwrittenInputRef = useRef<HTMLInputElement>(null);
+  const handwrittenCameraRearRef = useRef<HTMLInputElement>(null);
+  const handwrittenCameraFrontRef = useRef<HTMLInputElement>(null);
+  const [scanningHandwritten, setScanningHandwritten] = useState(false);
 
   const fetchClients = useCallback(async () => {
     setLoading(true);
@@ -61,20 +103,160 @@ export default function ClientsPage() {
     fetchClients();
   }, [fetchClients]);
 
+  const updateField = (field: keyof FormState, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleIDUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setScanning(true);
+    setScanResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/ocr/id-proof", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "OCR failed");
+      }
+
+      const data = await res.json();
+      const ext = data.extracted;
+
+      // Auto-fill form fields from extracted data
+      if (ext.name) updateField("name", ext.name);
+      if (ext.address) updateField("address", ext.address);
+      if (ext.aadhaarNumber) updateField("aadharNumber", ext.aadhaarNumber);
+      if (ext.panNumber) updateField("panNumber", ext.panNumber);
+
+      const docType = ext.documentType === "UNKNOWN" ? "document" : ext.documentType.replace(/_/g, " ");
+      const fields: string[] = [];
+      if (ext.name) fields.push("Name");
+      if (ext.aadhaarNumber) fields.push("Aadhaar");
+      if (ext.panNumber) fields.push("PAN");
+      if (ext.address) fields.push("Address");
+      if (ext.voterIdNumber) fields.push("Voter ID");
+
+      if (fields.length > 0) {
+        setScanResult(`${docType} detected — extracted: ${fields.join(", ")}`);
+        toast.success(`Extracted ${fields.length} field(s) from ${docType}`);
+      } else {
+        setScanResult("Could not extract fields. Try a clearer image.");
+        toast.warning("No fields could be extracted. Please try a clearer photo.");
+      }
+
+      // Add extracted info to notes for reference
+      const noteLines: string[] = [];
+      if (ext.fatherName) noteLines.push(`Father's Name: ${ext.fatherName}`);
+      if (ext.dob) noteLines.push(`DOB: ${ext.dob}`);
+      if (ext.gender) noteLines.push(`Gender: ${ext.gender}`);
+      if (ext.voterIdNumber) noteLines.push(`Voter ID: ${ext.voterIdNumber}`);
+      if (noteLines.length > 0) {
+        updateField("notes", noteLines.join("\n"));
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to process ID";
+      toast.error(message);
+      setScanResult("Scan failed — " + message);
+    } finally {
+      setScanning(false);
+      // Reset file inputs so same file can be re-uploaded
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (fileCameraRearRef.current) fileCameraRearRef.current.value = "";
+      if (fileCameraFrontRef.current) fileCameraFrontRef.current.value = "";
+    }
+  };
+
+  const handleHandwrittenUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setScanningHandwritten(true);
+    setScanResult(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/ocr/handwritten", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Handwritten scan failed");
+      }
+
+      const data = await res.json();
+      const ext = data.extracted;
+
+      // Auto-fill form fields
+      const filled: string[] = [];
+      if (ext.name) { updateField("name", ext.name); filled.push("Name"); }
+      if (ext.email) { updateField("email", ext.email); filled.push("Email"); }
+      if (ext.phone) { updateField("phone", ext.phone); filled.push("Phone"); }
+      if (ext.address) { updateField("address", ext.address); filled.push("Address"); }
+      if (ext.panNumber) { updateField("panNumber", ext.panNumber); filled.push("PAN"); }
+      if (ext.aadharNumber) { updateField("aadharNumber", ext.aadharNumber); filled.push("Aadhaar"); }
+      if (ext.gstNumber) { updateField("gstNumber", ext.gstNumber); filled.push("GST"); }
+
+      // Put extra info in notes
+      const noteLines: string[] = [];
+      if (ext.fatherName) noteLines.push(`Father's Name: ${ext.fatherName}`);
+      if (ext.dob) noteLines.push(`DOB: ${ext.dob}`);
+      if (ext.gender) noteLines.push(`Gender: ${ext.gender}`);
+      if (ext.occupation) noteLines.push(`Occupation: ${ext.occupation}`);
+      if (ext.notes) noteLines.push(ext.notes);
+      if (noteLines.length > 0) {
+        updateField("notes", noteLines.join("\n"));
+        filled.push("Notes");
+      }
+
+      if (filled.length > 0) {
+        setScanResult(`Handwritten scan — extracted: ${filled.join(", ")}`);
+        toast.success(`Extracted ${filled.length} field(s) from handwritten note`);
+      } else {
+        setScanResult("Could not extract fields. Try a clearer image with larger writing.");
+        toast.warning("No fields could be extracted. Please try a clearer photo.");
+      }
+
+      if (data.warning) {
+        setScanResult((prev) => prev + " (partial extraction)");
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to process image";
+      toast.error(message);
+      setScanResult("Scan failed — " + message);
+    } finally {
+      setScanningHandwritten(false);
+      if (handwrittenInputRef.current) handwrittenInputRef.current.value = "";
+      if (handwrittenCameraRearRef.current) handwrittenCameraRearRef.current.value = "";
+      if (handwrittenCameraFrontRef.current) handwrittenCameraFrontRef.current.value = "";
+    }
+  };
+
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const body = Object.fromEntries(formData.entries());
-
     const res = await fetch("/api/clients", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify(form),
     });
 
     if (res.ok) {
       toast.success("Client created successfully");
       setOpen(false);
+      setForm({ ...emptyForm });
+      setScanResult(null);
       fetchClients();
     } else {
       toast.error("Failed to create client");
@@ -86,25 +268,196 @@ export default function ClientsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Clients</h1>
         <RoleGate permission="clients:write">
-          <Dialog open={open} onOpenChange={setOpen}>
+          <Dialog
+            open={open}
+            onOpenChange={(v) => {
+              setOpen(v);
+              if (!v) {
+                setForm({ ...emptyForm });
+                setScanResult(null);
+              }
+            }}
+          >
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" /> Add Client
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Add New Client</DialogTitle>
               </DialogHeader>
+
+              {/* Smart Scan Section */}
+              <div className="grid grid-cols-2 gap-6">
+                {/* ID Proof — hidden file inputs */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/bmp"
+                  onChange={handleIDUpload}
+                  className="hidden"
+                />
+                <input
+                  ref={fileCameraRearRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  capture="environment"
+                  onChange={handleIDUpload}
+                  className="hidden"
+                />
+                <input
+                  ref={fileCameraFrontRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  capture="user"
+                  onChange={handleIDUpload}
+                  className="hidden"
+                />
+
+                {/* Handwritten — hidden file inputs */}
+                <input
+                  ref={handwrittenInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/bmp"
+                  onChange={handleHandwrittenUpload}
+                  className="hidden"
+                />
+                <input
+                  ref={handwrittenCameraRearRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  capture="environment"
+                  onChange={handleHandwrittenUpload}
+                  className="hidden"
+                />
+                <input
+                  ref={handwrittenCameraFrontRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  capture="user"
+                  onChange={handleHandwrittenUpload}
+                  className="hidden"
+                />
+
+                {/* ID Proof Card */}
+                <div className="rounded-lg border-2 border-dashed border-muted-foreground/25 p-3 text-center space-y-2">
+                  <FileCheck className="h-5 w-5 mx-auto text-muted-foreground" />
+                  <p className="text-sm font-medium">Scan ID Proof</p>
+                  <p className="text-xs text-muted-foreground">
+                    Aadhaar, PAN, Voter ID
+                  </p>
+                  {scanning ? (
+                    <div className="flex items-center justify-center gap-2 py-1 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Scanning...
+                    </div>
+                  ) : (
+                    <div className="flex gap-1.5">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        disabled={scanning || scanningHandwritten}
+                        onClick={() => fileInputRef.current?.click()}
+                        title="Upload from gallery"
+                      >
+                        <Upload className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        disabled={scanning || scanningHandwritten}
+                        onClick={() => fileCameraRearRef.current?.click()}
+                        title="Rear camera"
+                      >
+                        <Camera className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        disabled={scanning || scanningHandwritten}
+                        onClick={() => fileCameraFrontRef.current?.click()}
+                        title="Front camera (selfie)"
+                      >
+                        <SwitchCamera className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Handwritten Notes Card */}
+                <div className="rounded-lg border-2 border-dashed border-muted-foreground/25 p-3 text-center space-y-2">
+                  <PenLine className="h-5 w-5 mx-auto text-muted-foreground" />
+                  <p className="text-sm font-medium">Scan Handwritten</p>
+                  <p className="text-xs text-muted-foreground">
+                    Notes, forms, slips
+                  </p>
+                  {scanningHandwritten ? (
+                    <div className="flex items-center justify-center gap-2 py-1 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Reading...
+                    </div>
+                  ) : (
+                    <div className="flex gap-1.5">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        disabled={scanning || scanningHandwritten}
+                        onClick={() => handwrittenInputRef.current?.click()}
+                        title="Upload from gallery"
+                      >
+                        <Upload className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        disabled={scanning || scanningHandwritten}
+                        onClick={() => handwrittenCameraRearRef.current?.click()}
+                        title="Rear camera"
+                      >
+                        <Camera className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        disabled={scanning || scanningHandwritten}
+                        onClick={() => handwrittenCameraFrontRef.current?.click()}
+                        title="Front camera (selfie)"
+                      >
+                        <SwitchCamera className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {scanResult && (
+                <p className="text-xs text-muted-foreground text-center">{scanResult}</p>
+              )}
+
               <form onSubmit={handleCreate} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Name *</Label>
-                    <Input id="name" name="name" required />
+                    <Input
+                      id="name"
+                      value={form.name}
+                      onChange={(e) => updateField("name", e.target.value)}
+                      required
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="clientType">Type</Label>
-                    <Select name="clientType" defaultValue="INDIVIDUAL">
+                    <Select
+                      value={form.clientType}
+                      onValueChange={(v) => updateField("clientType", v ?? "INDIVIDUAL")}
+                    >
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -121,36 +474,69 @@ export default function ClientsPage() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="email">Email</Label>
-                    <Input id="email" name="email" type="email" />
+                    <Input
+                      id="email"
+                      type="email"
+                      value={form.email}
+                      onChange={(e) => updateField("email", e.target.value)}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="phone">Phone</Label>
-                    <Input id="phone" name="phone" />
+                    <Input
+                      id="phone"
+                      value={form.phone}
+                      onChange={(e) => updateField("phone", e.target.value)}
+                    />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="address">Address</Label>
-                  <Textarea id="address" name="address" rows={2} />
+                  <Textarea
+                    id="address"
+                    rows={2}
+                    value={form.address}
+                    onChange={(e) => updateField("address", e.target.value)}
+                  />
                 </div>
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="panNumber">PAN</Label>
-                    <Input id="panNumber" name="panNumber" />
+                    <Input
+                      id="panNumber"
+                      value={form.panNumber}
+                      onChange={(e) => updateField("panNumber", e.target.value)}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="aadharNumber">Aadhar</Label>
-                    <Input id="aadharNumber" name="aadharNumber" />
+                    <Input
+                      id="aadharNumber"
+                      value={form.aadharNumber}
+                      onChange={(e) => updateField("aadharNumber", e.target.value)}
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="gstNumber">GST</Label>
-                    <Input id="gstNumber" name="gstNumber" />
+                    <Input
+                      id="gstNumber"
+                      value={form.gstNumber}
+                      onChange={(e) => updateField("gstNumber", e.target.value)}
+                    />
                   </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="notes">Notes</Label>
-                  <Textarea id="notes" name="notes" rows={2} />
+                  <Textarea
+                    id="notes"
+                    rows={2}
+                    value={form.notes}
+                    onChange={(e) => updateField("notes", e.target.value)}
+                  />
                 </div>
-                <Button type="submit" className="w-full">Create Client</Button>
+                <Button type="submit" className="w-full">
+                  Create Client
+                </Button>
               </form>
             </DialogContent>
           </Dialog>
@@ -175,8 +561,8 @@ export default function ClientsPage() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {clients.map((client) => (
             <Link key={client.id} href={`/clients/${client.id}`}>
-              <Card className="hover:shadow-md transition-shadow cursor-pointer">
-                <CardHeader className="pb-3">
+              <Card className="hover:shadow-md transition-shadow cursor-pointer overflow-hidden p-0">
+                <CardHeader className={`pb-3 px-6 pt-6 ${CLIENT_TYPE_COLORS[client.clientType] || "bg-gray-500/15"}`}>
                   <div className="flex items-start justify-between">
                     <CardTitle className="text-base">{client.name}</CardTitle>
                     <Badge variant="secondary">
@@ -200,10 +586,17 @@ export default function ClientsPage() {
                       <Phone className="h-3 w-3" /> {client.phone}
                     </div>
                   )}
-                  <div className="pt-2 border-t">
+                  <div className="pt-2 border-t flex items-center justify-between">
                     <span className="font-medium text-foreground">
                       {client._count.caseClients} case(s)
                     </span>
+                    {client.phone && (
+                      <WhatsAppMessageDialog
+                        clientId={client.id}
+                        clientName={client.name}
+                        clientPhone={client.phone}
+                      />
+                    )}
                   </div>
                 </CardContent>
               </Card>

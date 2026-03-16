@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Send, MessageSquare, Plus, FileText, Loader2, Bot, User } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
 
 interface Message {
   id: string;
@@ -146,7 +147,7 @@ export default function ChatPage() {
         <div className="p-3 border-b flex items-center gap-2">
           <MessageSquare className="h-5 w-5" />
           <h2 className="font-semibold">AI Legal Assistant</h2>
-          <span className="text-xs text-muted-foreground">Powered by DeepSeek + RAG</span>
+          <span className="text-xs text-muted-foreground">Powered by Qwen + RAG</span>
         </div>
 
         <ScrollArea className="flex-1 p-4">
@@ -178,7 +179,13 @@ export default function ChatPage() {
                         : "bg-muted"
                     }`}
                   >
-                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                    {msg.role === "USER" ? (
+                      <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                    ) : (
+                      <div className="text-sm prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5">
+                        <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      </div>
+                    )}
                     {msg.sources && (
                       <div className="mt-2 pt-2 border-t border-border/50">
                         <p className="text-xs font-medium mb-1">Sources:</p>

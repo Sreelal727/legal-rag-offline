@@ -30,10 +30,10 @@ export default async function DashboardPage() {
     ]);
 
   const stats = [
-    { label: "Active Clients", value: clientCount, icon: Users, href: "/clients" },
-    { label: "Open Cases", value: caseCount, icon: Briefcase, href: "/cases" },
-    { label: "Documents", value: documentCount, icon: FileText, href: "/documents" },
-    { label: "Pending Notices", value: pendingNotices, icon: FileSignature, href: "/notices" },
+    { label: "Active Clients", value: clientCount, icon: Users, href: "/clients", color: "bg-blue-500" },
+    { label: "Open Cases", value: caseCount, icon: Briefcase, href: "/cases", color: "bg-emerald-500" },
+    { label: "Documents", value: documentCount, icon: FileText, href: "/documents", color: "bg-amber-500" },
+    { label: "Pending Notices", value: pendingNotices, icon: FileSignature, href: "/notices", color: "bg-purple-500" },
   ];
 
   return (
@@ -48,14 +48,14 @@ export default async function DashboardPage() {
           const Icon = stat.icon;
           return (
             <Link key={stat.label} href={stat.href}>
-              <Card className="hover:shadow-md transition-shadow">
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">
+              <Card className="hover:shadow-md transition-shadow overflow-hidden p-0">
+                <CardHeader className={`flex flex-row items-center justify-between pb-2 px-6 pt-4 ${stat.color} text-white`}>
+                  <CardTitle className="text-sm font-medium text-white">
                     {stat.label}
                   </CardTitle>
-                  <Icon className="h-4 w-4 text-muted-foreground" />
+                  <Icon className="h-4 w-4 text-white" />
                 </CardHeader>
-                <CardContent>
+                <CardContent className="px-6 py-4">
                   <div className="text-2xl font-bold">{stat.value}</div>
                 </CardContent>
               </Card>
@@ -65,14 +65,14 @@ export default async function DashboardPage() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+        <Card className="overflow-hidden p-0">
+          <CardHeader className="bg-rose-500 text-white px-6 pt-4 pb-3">
+            <CardTitle className="flex items-center gap-2 text-white">
               <Calendar className="h-5 w-5" />
               Upcoming Hearings
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-6 py-4">
             {upcomingHearings.length === 0 ? (
               <p className="text-sm text-muted-foreground">No upcoming hearings</p>
             ) : (
@@ -102,14 +102,14 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+        <Card className="overflow-hidden p-0">
+          <CardHeader className="bg-teal-500 text-white px-6 pt-4 pb-3">
+            <CardTitle className="flex items-center gap-2 text-white">
               <BookOpen className="h-5 w-5" />
               Recent Diary Entries
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-6 py-4">
             {recentDiary.length === 0 ? (
               <p className="text-sm text-muted-foreground">No diary entries</p>
             ) : (

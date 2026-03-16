@@ -355,6 +355,21 @@ model InvoiceItem {
   invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 }
 
+model FormatSample {
+  id            String   @id @default(uuid())
+  name          String
+  category      String
+  subcategory   String?
+  description   String?
+  textContent   String
+  filePath      String
+  fileName      String
+  fileSize      Int      @default(0)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
 model DocumentSubmission {
   id           String    @id @default(uuid())
   caseId       String?

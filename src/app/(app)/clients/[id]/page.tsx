@@ -4,8 +4,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import Link from "next/link";
-import { ArrowLeft, Mail, Phone, MapPin, FileText } from "lucide-react";
+import { ArrowLeft, Mail, Phone, MapPin, FileText, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { WhatsAppMessageDialog } from "@/components/whatsapp-message-dialog";
 
 export default async function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -29,9 +30,18 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ i
             <ArrowLeft className="h-4 w-4" />
           </Button>
         </Link>
-        <div>
-          <h1 className="text-3xl font-bold">{client.name}</h1>
-          <Badge variant="secondary">{client.clientType}</Badge>
+        <div className="flex items-center gap-3">
+          <div>
+            <h1 className="text-3xl font-bold">{client.name}</h1>
+            <Badge variant="secondary">{client.clientType}</Badge>
+          </div>
+          {client.phone && (
+            <WhatsAppMessageDialog
+              clientId={client.id}
+              clientName={client.name}
+              clientPhone={client.phone}
+            />
+          )}
         </div>
       </div>
 

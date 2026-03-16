@@ -63,10 +63,21 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Case number already exists" }, { status: 400 });
   }
 
-  // Find existing client by email or create new one
+  // Find existing client by ID, email, phone, or name — or create new one
   let client = null;
-  if (clientEmail) {
+  const existingClientId = body.existingClientId;
+
+  if (existingClientId) {
+    client = await prisma.client.findUnique({ where: { id: existingClientId } });
+  }
+  if (!client && clientEmail) {
     client = await prisma.client.findFirst({ where: { email: clientEmail } });
+  }
+  if (!client && clientPhone) {
+    client = await prisma.client.findFirst({ where: { phone: clientPhone } });
+  }
+  if (!client) {
+    client = await prisma.client.findFirst({ where: { name: clientName } });
   }
   if (!client) {
     client = await prisma.client.create({

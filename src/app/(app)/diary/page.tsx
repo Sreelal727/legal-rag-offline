@@ -101,7 +101,7 @@ export default function DiaryPage() {
             <DialogTrigger asChild>
               <Button><Plus className="mr-2 h-4 w-4" /> Add Entry</Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-4xl">
               <DialogHeader>
                 <DialogTitle>New Diary Entry</DialogTitle>
               </DialogHeader>

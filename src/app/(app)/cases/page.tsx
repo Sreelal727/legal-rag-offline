@@ -62,12 +62,24 @@ interface CaseItem {
   _count: { documents: number; caseEvents: number };
 }
 
+interface ExistingClient {
+  id: string;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  address: string | null;
+  clientType: string;
+}
+
 export default function CasesPage() {
   const [cases, setCases] = useState<CaseItem[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [existingClients, setExistingClients] = useState<ExistingClient[]>([]);
+  const [selectedClientId, setSelectedClientId] = useState<string>("");
+  const [selectedClient, setSelectedClient] = useState<ExistingClient | null>(null);
 
   const fetchCases = useCallback(async () => {
     setLoading(true);
@@ -84,10 +96,36 @@ export default function CasesPage() {
     fetchCases();
   }, [fetchCases]);
 
+  const fetchExistingClients = useCallback(async () => {
+    const res = await fetch("/api/clients?limit=100");
+    const data = await res.json();
+    setExistingClients(data.clients || []);
+  }, []);
+
+  useEffect(() => {
+    if (open) fetchExistingClients();
+  }, [open, fetchExistingClients]);
+
+  const handleClientSelect = (clientId: string | null) => {
+    if (!clientId || clientId === "new") {
+      setSelectedClientId("new");
+      setSelectedClient(null);
+      return;
+    }
+    setSelectedClientId(clientId);
+    const client = existingClients.find((c) => c.id === clientId) || null;
+    setSelectedClient(client);
+  };
+
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const body = Object.fromEntries(formData.entries());
+    const body: Record<string, any> = Object.fromEntries(formData.entries());
+
+    if (selectedClient) {
+      body.existingClientId = selectedClient.id;
+      body.clientName = selectedClient.name;
+    }
 
     const res = await fetch("/api/cases", {
       method: "POST",
@@ -110,7 +148,7 @@ export default function CasesPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Cases</h1>
         <RoleGate permission="cases:write">
-          <Dialog open={open} onOpenChange={setOpen}>
+          <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setSelectedClientId(""); setSelectedClient(null); } }}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" /> New Case
@@ -201,38 +239,64 @@ export default function CasesPage() {
 
                 <hr className="my-2" />
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Client Details</p>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="clientName">Client Name *</Label>
-                    <Input id="clientName" name="clientName" placeholder="Full name" required />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="clientType">Client Type</Label>
-                    <Select name="clientType" defaultValue="INDIVIDUAL">
-                      <SelectTrigger><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="INDIVIDUAL">Individual</SelectItem>
-                        <SelectItem value="COMPANY">Company</SelectItem>
-                        <SelectItem value="GOVERNMENT">Government</SelectItem>
-                        <SelectItem value="NGO">NGO</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="clientEmail">Email</Label>
-                    <Input id="clientEmail" name="clientEmail" type="email" placeholder="client@example.com" />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="clientPhone">Phone</Label>
-                    <Input id="clientPhone" name="clientPhone" placeholder="+91-XXXXXXXXXX" />
-                  </div>
-                </div>
                 <div className="space-y-2">
-                  <Label htmlFor="clientAddress">Address</Label>
-                  <Input id="clientAddress" name="clientAddress" placeholder="Full address" />
+                  <Label>Select Client</Label>
+                  <Select value={selectedClientId} onValueChange={handleClientSelect}>
+                    <SelectTrigger><SelectValue placeholder="Choose existing or new..." /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="new">+ New Client</SelectItem>
+                      {existingClients.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name} {c.phone ? `(${c.phone})` : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
+                {selectedClient && (
+                  <div className="text-xs text-muted-foreground bg-muted rounded-md p-2 space-y-0.5">
+                    <p><strong>{selectedClient.name}</strong> — {selectedClient.clientType}</p>
+                    {selectedClient.email && <p>Email: {selectedClient.email}</p>}
+                    {selectedClient.phone && <p>Phone: {selectedClient.phone}</p>}
+                    {selectedClient.address && <p>Address: {selectedClient.address}</p>}
+                  </div>
+                )}
+                {(!selectedClient) && (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="clientName">Client Name *</Label>
+                        <Input id="clientName" name="clientName" placeholder="Full name" required />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="clientType">Client Type</Label>
+                        <Select name="clientType" defaultValue="INDIVIDUAL">
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="INDIVIDUAL">Individual</SelectItem>
+                            <SelectItem value="COMPANY">Company</SelectItem>
+                            <SelectItem value="GOVERNMENT">Government</SelectItem>
+                            <SelectItem value="NGO">NGO</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="clientEmail">Email</Label>
+                        <Input id="clientEmail" name="clientEmail" type="email" placeholder="client@example.com" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="clientPhone">Phone</Label>
+                        <Input id="clientPhone" name="clientPhone" placeholder="+91-XXXXXXXXXX" />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="clientAddress">Address</Label>
+                      <Input id="clientAddress" name="clientAddress" placeholder="Full address" />
+                    </div>
+                  </>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="clientRole">Role in Case</Label>
                   <Select name="clientRole" defaultValue="PETITIONER">

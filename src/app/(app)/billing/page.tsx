@@ -15,8 +15,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Plus, Clock, Receipt, IndianRupee, Trash2, FileText, Loader2,
+  Plus, Clock, Receipt, IndianRupee, Trash2, FileText, Loader2, Download,
 } from "lucide-react";
+import { downloadInvoicePDF } from "@/lib/invoice-pdf";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/role-gate";
 import { format } from "date-fns";
@@ -70,6 +71,8 @@ export default function BillingPage() {
   const [selectedEntries, setSelectedEntries] = useState<Set<string>>(new Set());
   const [viewInvoice, setViewInvoice] = useState<any>(null);
   const [viewOpen, setViewOpen] = useState(false);
+  const [invoiceClientId, setInvoiceClientId] = useState("");
+  const [invoiceCaseId, setInvoiceCaseId] = useState("");
 
   // Invoice form items
   const [invoiceItems, setInvoiceItems] = useState<{ description: string; quantity: string; rate: string }[]>([
@@ -117,8 +120,8 @@ export default function BillingPage() {
   const handleCreateInvoice = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
-    const clientId = fd.get("clientId") as string;
-    const caseId = fd.get("caseId") as string;
+    const clientId = invoiceClientId;
+    const caseId = invoiceCaseId;
     const gstRate = fd.get("gstRate") as string;
     const dueDate = fd.get("dueDate") as string;
     const notes = fd.get("notes") as string;
@@ -152,6 +155,8 @@ export default function BillingPage() {
       setInvoiceOpen(false);
       setSelectedEntries(new Set());
       setInvoiceItems([{ description: "", quantity: "1", rate: "" }]);
+      setInvoiceClientId("");
+      setInvoiceCaseId("");
       fetchData();
     } else {
       const err = await res.json();
@@ -264,8 +269,12 @@ export default function BillingPage() {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label>Client *</Label>
-                      <Select name="clientId" required>
-                        <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
+                      <Select value={invoiceClientId} onValueChange={(v) => { setInvoiceClientId(v ?? ""); setInvoiceCaseId(""); }}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select client">
+                            {invoiceClientId ? clients.find((c: any) => c.id === invoiceClientId)?.name : "Select client"}
+                          </SelectValue>
+                        </SelectTrigger>
                         <SelectContent>
                           {clients.map((c: any) => (
                             <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
@@ -275,12 +284,23 @@ export default function BillingPage() {
                     </div>
                     <div className="space-y-2">
                       <Label>Case</Label>
-                      <Select name="caseId">
-                        <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                      <Select
+                        value={invoiceCaseId}
+                        onValueChange={(v) => setInvoiceCaseId(!v || v === "none" ? "" : v)}
+                        disabled={!invoiceClientId}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={invoiceClientId ? "Select case" : "Select client first"}>
+                            {invoiceCaseId ? cases.find((c: any) => c.id === invoiceCaseId)?.caseNumber : (invoiceClientId ? "Select case" : "Select client first")}
+                          </SelectValue>
+                        </SelectTrigger>
                         <SelectContent>
-                          {cases.map((c: any) => (
-                            <SelectItem key={c.id} value={c.id}>{c.caseNumber}</SelectItem>
-                          ))}
+                          <SelectItem value="none">None</SelectItem>
+                          {cases
+                            .filter((c: any) => c.caseClients?.some((cc: any) => cc.clientId === invoiceClientId || cc.client?.id === invoiceClientId))
+                            .map((c: any) => (
+                              <SelectItem key={c.id} value={c.id}>{c.caseNumber} — {c.title}</SelectItem>
+                            ))}
                         </SelectContent>
                       </Select>
                     </div>
@@ -478,6 +498,13 @@ export default function BillingPage() {
 
               {/* Actions */}
               <div className="flex gap-2 border-t pt-3">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => downloadInvoicePDF(viewInvoice)}
+                >
+                  <Download className="mr-1 h-4 w-4" /> Download PDF
+                </Button>
                 {viewInvoice.invoice.status === "DRAFT" && (
                   <Button size="sm" onClick={() => handleUpdateStatus(viewInvoice.invoice.id, "SENT")}>
                     Mark as Sent

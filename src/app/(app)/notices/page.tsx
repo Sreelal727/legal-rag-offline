@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
-import { Plus, FileSignature, Loader2, Sparkles, Eye, CheckCircle, XCircle } from "lucide-react";
+import { Plus, FileSignature, Loader2, Sparkles, Eye, CheckCircle, XCircle, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/role-gate";
 import { format } from "date-fns";
@@ -48,9 +48,18 @@ interface Template {
   variables: string;
 }
 
+interface FormatSample {
+  id: string;
+  name: string;
+  category: string;
+  subcategory: string | null;
+}
+
 export default function NoticesPage() {
   const [notices, setNotices] = useState<NoticeItem[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
+  const [formatSamples, setFormatSamples] = useState<FormatSample[]>([]);
+  const [selectedFormatId, setSelectedFormatId] = useState("");
   const [clients, setClients] = useState<any[]>([]);
   const [cases, setCases] = useState<any[]>([]);
   const [open, setOpen] = useState(false);
@@ -74,6 +83,7 @@ export default function NoticesPage() {
   useEffect(() => {
     fetchNotices();
     fetch("/api/notices/templates").then((r) => r.json()).then((d) => setTemplates(Array.isArray(d) ? d : []));
+    fetch("/api/format-library").then((r) => r.json()).then((d) => setFormatSamples(Array.isArray(d) ? d : []));
     fetch("/api/clients?limit=100").then((r) => r.json()).then((d) => setClients(d.clients || []));
     fetch("/api/cases?limit=100").then((r) => r.json()).then((d) => setCases(d.cases || []));
   }, [fetchNotices]);
@@ -88,16 +98,17 @@ export default function NoticesPage() {
   };
 
   const handleGenerate = async () => {
-    if (!selectedTemplate) return;
+    if (!selectedTemplate && !selectedFormatId) return;
     setGenerating(true);
     try {
       const res = await fetch("/api/notices/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          templateContent: selectedTemplate.content,
+          templateContent: selectedTemplate?.content || "",
           variables: {},
           instructions: "Please complete this notice with appropriate legal language.",
+          formatSampleId: selectedFormatId || undefined,
         }),
       });
       const data = await res.json();
@@ -133,6 +144,7 @@ export default function NoticesPage() {
       toast.success("Notice created");
       setOpen(false);
       setSelectedTemplate(null);
+      setSelectedFormatId("");
       setDraftContent("");
       setDraftTitle("");
       fetchNotices();
@@ -192,6 +204,30 @@ export default function NoticesPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                {formatSamples.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-1.5">
+                      <BookOpen className="h-3.5 w-3.5" /> Format Sample (Style Reference)
+                    </Label>
+                    <Select value={selectedFormatId} onValueChange={(v: any) => setSelectedFormatId(v === "none" ? "" : String(v || ""))}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Choose a format sample for AI to follow..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No format reference</SelectItem>
+                        {formatSamples.map((f) => (
+                          <SelectItem key={f.id} value={f.id}>
+                            {f.name} ({f.category.replace(/_/g, " ")})
+                            {f.subcategory ? ` — ${f.subcategory}` : ""}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      AI will follow the exact structure and style of the selected format sample
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="draftTitle">Title</Label>
                   <Input
@@ -203,7 +239,7 @@ export default function NoticesPage() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label>Content</Label>
-                    {selectedTemplate && (
+                    {(selectedTemplate || selectedFormatId) && (
                       <Button
                         size="sm"
                         variant="outline"

@@ -83,10 +83,18 @@ interface Submission {
   creator: { id: string; name: string };
 }
 
+interface ClientOption {
+  id: string;
+  name: string;
+  role: string; // role in the case (PETITIONER, RESPONDENT, etc.)
+}
+
 interface CaseOption {
   id: string;
   caseNumber: string;
   title: string;
+  courtName: string | null;
+  clients: ClientOption[];
 }
 
 interface UserOption {
@@ -98,10 +106,14 @@ interface UserOption {
 export default function SubmissionsPage() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [cases, setCases] = useState<CaseOption[]>([]);
+  const [allClients, setAllClients] = useState<{ id: string; name: string }[]>([]);
   const [users, setUsers] = useState<UserOption[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [dragItem, setDragItem] = useState<string | null>(null);
+  const [selectedCaseId, setSelectedCaseId] = useState<string>("");
+  const [selectedClientId, setSelectedClientId] = useState<string>("");
+  const [autoCourtName, setAutoCourtName] = useState<string>("");
 
   const fetchSubmissions = useCallback(async () => {
     setLoading(true);
@@ -112,17 +124,31 @@ export default function SubmissionsPage() {
   }, []);
 
   const fetchCasesAndUsers = useCallback(async () => {
-    const [casesRes, usersRes] = await Promise.all([
+    const [casesRes, usersRes, clientsRes] = await Promise.all([
       fetch("/api/cases?limit=100"),
       fetch("/api/users"),
+      fetch("/api/clients?limit=100"),
     ]);
     const casesData = await casesRes.json();
     const usersData = await usersRes.json();
+    const clientsData = await clientsRes.json();
     setCases(
       (casesData.cases || []).map((c: any) => ({
         id: c.id,
         caseNumber: c.caseNumber,
         title: c.title,
+        courtName: c.courtName || null,
+        clients: (c.caseClients || []).map((cc: any) => ({
+          id: cc.client.id,
+          name: cc.client.name,
+          role: cc.role,
+        })),
+      }))
+    );
+    setAllClients(
+      (clientsData.clients || []).map((c: any) => ({
+        id: c.id,
+        name: c.name,
       }))
     );
     setUsers(
@@ -139,10 +165,33 @@ export default function SubmissionsPage() {
     fetchCasesAndUsers();
   }, [fetchSubmissions, fetchCasesAndUsers]);
 
+  // When case changes, auto-fill client and court
+  const handleCaseChange = (caseId: string) => {
+    setSelectedCaseId(caseId);
+    const selectedCase = cases.find((c) => c.id === caseId);
+    if (selectedCase) {
+      // Auto-fill court name
+      if (selectedCase.courtName) setAutoCourtName(selectedCase.courtName);
+      // Auto-select first client of the case
+      if (selectedCase.clients.length > 0) {
+        setSelectedClientId(selectedCase.clients[0].id);
+      } else {
+        setSelectedClientId("");
+      }
+    } else {
+      setAutoCourtName("");
+      setSelectedClientId("");
+    }
+  };
+
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
-    const body = Object.fromEntries(formData.entries());
+    const body: Record<string, any> = Object.fromEntries(formData.entries());
+
+    // Add select-based fields that aren't in native form data
+    if (selectedCaseId) body.caseId = selectedCaseId;
+    if (selectedClientId) body.clientId = selectedClientId;
 
     const res = await fetch("/api/document-submissions", {
       method: "POST",
@@ -153,6 +202,9 @@ export default function SubmissionsPage() {
     if (res.ok) {
       toast.success("Document submission created");
       setOpen(false);
+      setSelectedCaseId("");
+      setSelectedClientId("");
+      setAutoCourtName("");
       fetchSubmissions();
     } else {
       const err = await res.json();
@@ -250,7 +302,14 @@ export default function SubmissionsPage() {
           </p>
         </div>
         <RoleGate permission="cases:write">
-          <Dialog open={open} onOpenChange={setOpen}>
+          <Dialog open={open} onOpenChange={(v) => {
+              setOpen(v);
+              if (!v) {
+                setSelectedCaseId("");
+                setSelectedClientId("");
+                setAutoCourtName("");
+              }
+            }}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" /> Add Document
@@ -311,24 +370,66 @@ export default function SubmissionsPage() {
                     placeholder="Details about the document..."
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label>Case</Label>
+                  <Select
+                    value={selectedCaseId}
+                    onValueChange={(v) => handleCaseChange(v ?? "")}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select case" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {cases.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.caseNumber} — {c.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="caseId">Case</Label>
-                    <Select name="caseId">
+                    <Label>Client</Label>
+                    <Select
+                      value={selectedClientId}
+                      onValueChange={(v) => setSelectedClientId(v ?? "")}
+                    >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select case" />
+                        <SelectValue placeholder={selectedCaseId ? "Select client" : "Select case first"} />
                       </SelectTrigger>
                       <SelectContent>
-                        {cases.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.caseNumber}
-                          </SelectItem>
-                        ))}
+                        {selectedCaseId ? (
+                          // Show clients linked to the selected case
+                          (() => {
+                            const selectedCase = cases.find((c) => c.id === selectedCaseId);
+                            const caseClients = selectedCase?.clients || [];
+                            if (caseClients.length === 0) {
+                              return (
+                                <SelectItem value="__none" disabled>
+                                  No clients linked to this case
+                                </SelectItem>
+                              );
+                            }
+                            return caseClients.map((cl) => (
+                              <SelectItem key={cl.id} value={cl.id}>
+                                {cl.name} ({cl.role})
+                              </SelectItem>
+                            ));
+                          })()
+                        ) : (
+                          // Show all clients when no case selected
+                          allClients.map((cl) => (
+                            <SelectItem key={cl.id} value={cl.id}>
+                              {cl.name}
+                            </SelectItem>
+                          ))
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="assignedTo">Assign To</Label>
+                    <Label>Assign To</Label>
                     <Select name="assignedTo">
                       <SelectTrigger>
                         <SelectValue placeholder="Select person" />
@@ -336,7 +437,7 @@ export default function SubmissionsPage() {
                       <SelectContent>
                         {users.map((u) => (
                           <SelectItem key={u.id} value={u.id}>
-                            {u.name}
+                            {u.name} ({u.role.replace(/_/g, " ")})
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -354,6 +455,8 @@ export default function SubmissionsPage() {
                       id="courtName"
                       name="courtName"
                       placeholder="Court name"
+                      value={autoCourtName}
+                      onChange={(e) => setAutoCourtName(e.target.value)}
                     />
                   </div>
                 </div>
@@ -380,7 +483,7 @@ export default function SubmissionsPage() {
                 onDrop={(e) => handleDrop(e, col.id)}
               >
                 <div className="flex items-center justify-between mb-3">
-                  <h3 className="font-semibold text-sm">{col.label}</h3>
+                  <h3 className="font-semibold text-sm text-gray-900">{col.label}</h3>
                   <Badge variant="secondary" className="text-xs">
                     {items.length}
                   </Badge>
@@ -426,6 +529,13 @@ export default function SubmissionsPage() {
                           <div className="flex items-center gap-1 text-xs text-muted-foreground">
                             <Briefcase className="h-3 w-3" />
                             {item.case.caseNumber}
+                          </div>
+                        )}
+
+                        {item.client && (
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <User className="h-3 w-3" />
+                            {item.client.name}
                           </div>
                         )}
 

@@ -36,6 +36,7 @@ const navItems = [
   { href: "/schedule", label: "Schedule", icon: Calendar, permission: "schedule:read" as Permission },
   { href: "/limitation", label: "Limitation Tracker", icon: Clock, permission: "limitation:read" as Permission },
   { href: "/notices", label: "Notices", icon: FileSignature, permission: "notices:read" as Permission },
+  { href: "/format-library", label: "Format Library", icon: FileText, permission: "notices:read" as Permission },
   { href: "/billing", label: "Billing", icon: Receipt, permission: "billing:read" as Permission },
   { href: "/chat", label: "AI Chat", icon: MessageSquare, permission: "chat:use" as Permission },
   { href: "/users", label: "Users", icon: UserCog, permission: "users:read" as Permission },

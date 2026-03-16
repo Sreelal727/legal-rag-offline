@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { withAuth } from "@/lib/api-utils";
 import { semanticSearch } from "@/lib/rag/pipeline";
 import { chatCompletion, buildRAGPrompt } from "@/lib/llm";
+import { searchAndSummarize } from "@/lib/indian-kanoon";
 import { format } from "date-fns";
 
 function fmt(d: Date | string | null) {
@@ -250,6 +251,75 @@ export async function POST(request: NextRequest) {
     }));
   } catch (err) {
     console.error("Semantic search failed:", err);
+  }
+
+  // Check if this is a document drafting request — if so, find matching format samples
+  const q = message.toLowerCase();
+  const draftKeywords = ["draft", "prepare", "write", "create", "generate", "format", "notice", "petition", "affidavit", "suit", "application", "complaint", "reply", "statement", "scrutiny"];
+  const isDraftRequest = draftKeywords.some((kw) => q.includes(kw));
+
+  if (isDraftRequest) {
+    try {
+      const formatSamples = await prisma.formatSample.findMany({
+        where: { isActive: true },
+        select: { name: true, category: true, subcategory: true, textContent: true },
+        take: 3,
+      });
+
+      // Try to find the most relevant format sample based on message content
+      const categoryMap: Record<string, string[]> = {
+        LEGAL_NOTICE: ["notice", "legal notice", "cheque bounce", "138", "recovery"],
+        BANK_SCRUTINY_REPORT: ["bank", "scrutiny", "account", "transaction"],
+        SUIT_FORMAT: ["suit", "civil suit", "plaint"],
+        FAMILY_COURT_PETITION: ["family", "divorce", "custody", "maintenance", "domestic"],
+        COUNTER_STATEMENT: ["counter", "reply", "written statement", "defence"],
+        AFFIDAVIT: ["affidavit", "sworn", "declaration"],
+        MACT_WRITTEN_STATEMENT: ["mact", "motor accident", "accident claim"],
+        INTERLOCUTORY_APPLICATION: ["interlocutory", "interim", "application", "ia"],
+        DLSA_PETITION: ["dlsa", "legal aid", "legal services"],
+        EXECUTION_PETITION: ["execution", "decree", "enforce"],
+        COMMERCIAL_SUIT: ["commercial", "commercial suit", "trade"],
+      };
+
+      let matchedSamples = formatSamples;
+      for (const [category, keywords] of Object.entries(categoryMap)) {
+        if (keywords.some((kw) => q.includes(kw))) {
+          const categoryMatch = await prisma.formatSample.findMany({
+            where: { isActive: true, category },
+            select: { name: true, category: true, subcategory: true, textContent: true },
+            take: 2,
+          });
+          if (categoryMatch.length > 0) {
+            matchedSamples = categoryMatch;
+            break;
+          }
+        }
+      }
+
+      if (matchedSamples.length > 0) {
+        const formatContext = matchedSamples.map((s) =>
+          `[Format: ${s.name} | Category: ${s.category}${s.subcategory ? ` | Sub: ${s.subcategory}` : ""}]\n${s.textContent.substring(0, 3000)}`
+        ).join("\n\n---\n\n");
+        docContext.push(`FORMAT LIBRARY SAMPLES (use these as structural references for drafting):\n${formatContext}`);
+      }
+    } catch (err) {
+      console.error("Format sample lookup failed:", err);
+    }
+  }
+
+  // Search Indian Kanoon for case law when the query involves legal research
+  const legalKeywords = ["section", "act", "judgment", "case law", "precedent", "ruling", "court", "supreme court", "high court", "ipc", "crpc", "cpc", "constitution", "article", "order", "bail", "quash", "writ", "habeas", "mandamus", "certiorari", "appeal", "revision", "review", "sentence", "conviction", "acquittal", "decree", "injunction", "specific relief", "limitation", "evidence", "witness", "cognizable", "bailable", "anticipatory", "compensation", "negligence", "defamation", "fraud", "breach", "contract", "tort", "property", "succession", "inheritance", "motor vehicle", "consumer", "arbitration", "negotiable instrument", "138", "420", "302", "498", "354", "506", "34"];
+  const isLegalQuery = legalKeywords.some((kw) => q.includes(kw));
+
+  if (isLegalQuery) {
+    try {
+      const ikContext = await searchAndSummarize(message, 5);
+      if (ikContext) {
+        docContext.push(ikContext);
+      }
+    } catch (err) {
+      console.error("Indian Kanoon search failed:", err);
+    }
   }
 
   // Build prompt with both database and document context
