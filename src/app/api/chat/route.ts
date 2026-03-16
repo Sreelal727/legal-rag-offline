@@ -257,12 +257,13 @@ export async function POST(request: NextRequest) {
   const q = message.toLowerCase();
   const draftKeywords = ["draft", "prepare", "write", "create", "generate", "format", "notice", "petition", "affidavit", "suit", "application", "complaint", "reply", "statement", "scrutiny"];
   const isDraftRequest = draftKeywords.some((kw) => q.includes(kw));
+  let matchedFormatSampleId: string | null = null;
 
   if (isDraftRequest) {
     try {
       const formatSamples = await prisma.formatSample.findMany({
         where: { isActive: true },
-        select: { name: true, category: true, subcategory: true, textContent: true },
+        select: { id: true, name: true, category: true, subcategory: true, textContent: true },
         take: 3,
       });
 
@@ -286,7 +287,7 @@ export async function POST(request: NextRequest) {
         if (keywords.some((kw) => q.includes(kw))) {
           const categoryMatch = await prisma.formatSample.findMany({
             where: { isActive: true, category },
-            select: { name: true, category: true, subcategory: true, textContent: true },
+            select: { id: true, name: true, category: true, subcategory: true, textContent: true },
             take: 2,
           });
           if (categoryMatch.length > 0) {
@@ -297,6 +298,7 @@ export async function POST(request: NextRequest) {
       }
 
       if (matchedSamples.length > 0) {
+        matchedFormatSampleId = matchedSamples[0].id;
         const formatContext = matchedSamples.map((s) =>
           `[Format: ${s.name} | Category: ${s.category}${s.subcategory ? ` | Sub: ${s.subcategory}` : ""}]\n${s.textContent.substring(0, 3000)}`
         ).join("\n\n---\n\n");
@@ -351,6 +353,7 @@ export async function POST(request: NextRequest) {
       sessionId: chatSession.id,
       message: response,
       sources,
+      formatSampleId: matchedFormatSampleId,
     });
   } catch (err: any) {
     return NextResponse.json(

@@ -83,7 +83,7 @@ export default function NoticesPage() {
   useEffect(() => {
     fetchNotices();
     fetch("/api/notices/templates").then((r) => r.json()).then((d) => setTemplates(Array.isArray(d) ? d : []));
-    fetch("/api/format-library").then((r) => r.json()).then((d) => setFormatSamples(Array.isArray(d) ? d : []));
+    fetch("/api/format-library").then((r) => r.text()).then((t) => { try { const d = JSON.parse(t); setFormatSamples(Array.isArray(d) ? d : []); } catch { setFormatSamples([]); } });
     fetch("/api/clients?limit=100").then((r) => r.json()).then((d) => setClients(d.clients || []));
     fetch("/api/cases?limit=100").then((r) => r.json()).then((d) => setCases(d.cases || []));
   }, [fetchNotices]);

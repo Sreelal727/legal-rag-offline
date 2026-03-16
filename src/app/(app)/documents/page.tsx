@@ -43,6 +43,7 @@ export default function DocumentsPage() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [open, setOpen] = useState(false);
+  const [selectedCaseId, setSelectedCaseId] = useState("");
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string | null>(null);
 
@@ -68,6 +69,8 @@ export default function DocumentsPage() {
   const handleUpload = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    formData.delete("caseId");
+    if (selectedCaseId) formData.append("caseId", selectedCaseId);
 
     const res = await fetch("/api/documents", {
       method: "POST",
@@ -77,6 +80,7 @@ export default function DocumentsPage() {
     if (res.ok) {
       toast.success("Document uploaded");
       setOpen(false);
+      setSelectedCaseId("");
       fetchDocuments();
     } else {
       toast.error("Upload failed");
@@ -146,11 +150,16 @@ export default function DocumentsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label>Link to Case (optional)</Label>
-                  <Select name="caseId">
-                    <SelectTrigger><SelectValue placeholder="No case" /></SelectTrigger>
+                  <Select value={selectedCaseId} onValueChange={(v) => setSelectedCaseId(!v || v === "none" ? "" : v)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="No case">
+                        {selectedCaseId ? cases.find((c: any) => c.id === selectedCaseId)?.caseNumber || "No case" : "No case"}
+                      </SelectValue>
+                    </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="none">No case</SelectItem>
                       {cases.map((c: any) => (
-                        <SelectItem key={c.id} value={c.id}>{c.caseNumber}</SelectItem>
+                        <SelectItem key={c.id} value={c.id}>{c.caseNumber} — {c.title}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>

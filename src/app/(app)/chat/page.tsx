@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, MessageSquare, Plus, FileText, Loader2, Bot, User } from "lucide-react";
+import { Send, MessageSquare, Plus, FileText, Loader2, Bot, User, Download } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
@@ -16,6 +16,7 @@ interface Message {
   role: string;
   content: string;
   sources?: string;
+  formatSampleId?: string;
   createdAt: string;
 }
 
@@ -94,6 +95,7 @@ export default function ChatPage() {
             role: "ASSISTANT",
             content: data.message,
             sources: data.sources ? JSON.stringify(data.sources) : undefined,
+            formatSampleId: data.formatSampleId || undefined,
             createdAt: new Date().toISOString(),
           },
         ]);
@@ -107,6 +109,33 @@ export default function ChatPage() {
     }
 
     setSending(false);
+  };
+
+  const handleExport = async (content: string, format: "docx" | "pdf", formatSampleId?: string) => {
+    try {
+      const res = await fetch("/api/chat/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, format, formatSampleId }),
+      });
+
+      if (!res.ok) {
+        toast.error("Export failed");
+        return;
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `legal-document.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Export failed");
+    }
   };
 
   useEffect(() => {
@@ -184,6 +213,38 @@ export default function ChatPage() {
                     ) : (
                       <div className="text-sm prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-headings:my-2 prose-ul:my-1 prose-ol:my-1 prose-li:my-0.5">
                         <ReactMarkdown>{msg.content}</ReactMarkdown>
+                      </div>
+                    )}
+                    {msg.role === "ASSISTANT" && msg.content.length > 300 && (
+                      <div className="mt-2 pt-2 border-t border-border/50 flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">Export:</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleExport(msg.content, "docx", msg.formatSampleId);
+                          }}
+                        >
+                          <Download className="mr-1 h-3 w-3" /> DOCX
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleExport(msg.content, "pdf", msg.formatSampleId);
+                          }}
+                        >
+                          <Download className="mr-1 h-3 w-3" /> PDF
+                        </Button>
+                        {msg.formatSampleId && (
+                          <Badge variant="outline" className="text-[10px] h-5">
+                            Format applied
+                          </Badge>
+                        )}
                       </div>
                     )}
                     {msg.sources && (
