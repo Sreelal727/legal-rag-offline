@@ -324,6 +324,84 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  // Check if user is asking for documents related to a case
+  const docRequestKeywords = ["document", "documents", "files", "file", "download", "get all", "show all", "list all", "give me", "send me", "attached", "attachments", "uploaded"];
+  const isDocRequest = docRequestKeywords.some((kw) => q.includes(kw));
+  let caseDocuments: any[] = [];
+
+  if (isDocRequest) {
+    try {
+      // Try to find which case the user is asking about
+      const allCases = await prisma.case.findMany({
+        where: { status: { not: "CLOSED" } },
+        select: { id: true, caseNumber: true, title: true },
+      });
+
+      let matchedCaseId: string | null = caseId || null;
+
+      if (!matchedCaseId) {
+        // Try matching case number or title from the message
+        for (const c of allCases) {
+          if (q.includes(c.caseNumber.toLowerCase()) || q.includes(c.title.toLowerCase())) {
+            matchedCaseId = c.id;
+            break;
+          }
+          // Also try partial matches on case number parts
+          const parts = c.caseNumber.toLowerCase().split(/[\/\-\s]+/);
+          if (parts.length > 1 && parts.some((p) => p.length > 2 && q.includes(p))) {
+            matchedCaseId = c.id;
+            break;
+          }
+        }
+      }
+
+      if (matchedCaseId) {
+        const docs = await prisma.document.findMany({
+          where: { caseId: matchedCaseId },
+          select: {
+            id: true,
+            title: true,
+            fileName: true,
+            fileType: true,
+            fileSize: true,
+            createdAt: true,
+          },
+          orderBy: { createdAt: "desc" },
+        });
+        caseDocuments = docs;
+
+        if (docs.length > 0) {
+          const docList = docs.map((d) => `- ${d.title} (${d.fileName}, ${(d.fileSize / 1024).toFixed(1)} KB)`).join("\n");
+          docContext.push(`DOCUMENTS FOUND FOR THIS CASE:\n${docList}\n\nTell the user these documents are available for download below your response.`);
+        } else {
+          docContext.push("No documents were found uploaded for this case. Let the user know.");
+        }
+      } else {
+        // If no specific case matched, search all documents
+        const allDocs = await prisma.document.findMany({
+          select: {
+            id: true,
+            title: true,
+            fileName: true,
+            fileType: true,
+            fileSize: true,
+            createdAt: true,
+            case: { select: { caseNumber: true, title: true } },
+          },
+          orderBy: { createdAt: "desc" },
+          take: 20,
+        });
+        if (allDocs.length > 0) {
+          caseDocuments = allDocs;
+          const docList = allDocs.map((d) => `- ${d.title} (${d.fileName}) ${d.case ? `| Case: ${d.case.caseNumber}` : ""}`).join("\n");
+          docContext.push(`ALL AVAILABLE DOCUMENTS:\n${docList}\n\nList these documents for the user and mention they are available for download below.`);
+        }
+      }
+    } catch (err) {
+      console.error("Document lookup failed:", err);
+    }
+  }
+
   // Build prompt with both database and document context
   const messages = buildRAGPrompt(message, docContext, dbContext);
 
@@ -340,20 +418,106 @@ export async function POST(request: NextRequest) {
   try {
     const response = await chatCompletion(messages);
 
+    // Parse action blocks from AI response
+    let displayMessage = response;
+    let actionResult: { type: string; success: boolean; message: string; data?: any } | null = null;
+
+    const actionMatch = response.match(/```action\s*\n([\s\S]*?)\n```/);
+    if (actionMatch) {
+      try {
+        const action = JSON.parse(actionMatch[1].trim());
+        displayMessage = response.replace(/```action\s*\n[\s\S]*?\n```/, "").trim();
+
+        if (action.type === "CREATE_CLIENT") {
+          const { name, email, phone, address, clientType, panNumber, aadharNumber, gstNumber, notes } = action.data;
+          if (!name) {
+            actionResult = { type: "CREATE_CLIENT", success: false, message: "Client name is required." };
+          } else {
+            const newClient = await prisma.client.create({
+              data: {
+                name,
+                email: email || null,
+                phone: phone || null,
+                address: address || null,
+                clientType: clientType || "INDIVIDUAL",
+                panNumber: panNumber || null,
+                aadharNumber: aadharNumber || null,
+                gstNumber: gstNumber || null,
+                notes: notes || null,
+              },
+            });
+            actionResult = {
+              type: "CREATE_CLIENT",
+              success: true,
+              message: `Client "${newClient.name}" has been saved successfully!`,
+              data: { id: newClient.id, name: newClient.name },
+            };
+            displayMessage += `\n\n**Client "${newClient.name}" has been saved successfully to the system.**`;
+          }
+        } else if (action.type === "CREATE_CASE") {
+          const { caseNumber, title, clientName, description, caseType, courtName, courtType, judge, filingDate, status: caseStatus, priority } = action.data;
+          if (!caseNumber || !title || !clientName) {
+            actionResult = { type: "CREATE_CASE", success: false, message: "Case number, title, and client name are required." };
+          } else {
+            // Find the client
+            const client = await prisma.client.findFirst({
+              where: { name: { contains: clientName } },
+            });
+            if (!client) {
+              actionResult = { type: "CREATE_CASE", success: false, message: `Client "${clientName}" not found. Please create the client first.` };
+              displayMessage += `\n\n**Could not create the case — client "${clientName}" was not found in the system. Please add the client first.**`;
+            } else {
+              const newCase = await prisma.case.create({
+                data: {
+                  caseNumber,
+                  title,
+                  description: description || null,
+                  caseType: caseType || "CIVIL",
+                  courtName: courtName || null,
+                  courtType: courtType || null,
+                  judge: judge || null,
+                  filingDate: filingDate ? new Date(filingDate) : null,
+                  status: caseStatus || "ACTIVE",
+                  priority: priority || "MEDIUM",
+                  caseClients: {
+                    create: {
+                      clientId: client.id,
+                      role: "PETITIONER",
+                    },
+                  },
+                },
+              });
+              actionResult = {
+                type: "CREATE_CASE",
+                success: true,
+                message: `Case "${newCase.caseNumber} - ${newCase.title}" has been saved successfully!`,
+                data: { id: newCase.id, caseNumber: newCase.caseNumber, title: newCase.title },
+              };
+              displayMessage += `\n\n**Case "${newCase.caseNumber} - ${newCase.title}" has been saved successfully and linked to client "${client.name}".**`;
+            }
+          }
+        }
+      } catch (parseErr) {
+        console.error("Failed to parse/execute action block:", parseErr);
+      }
+    }
+
     await prisma.chatMessage.create({
       data: {
         sessionId: chatSession.id,
         role: "ASSISTANT",
-        content: response,
+        content: displayMessage,
         sources: sources.length > 0 ? JSON.stringify(sources) : null,
       },
     });
 
     return NextResponse.json({
       sessionId: chatSession.id,
-      message: response,
+      message: displayMessage,
       sources,
       formatSampleId: matchedFormatSampleId,
+      actionResult,
+      documents: caseDocuments.length > 0 ? caseDocuments : undefined,
     });
   } catch (err: any) {
     return NextResponse.json(

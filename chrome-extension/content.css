@@ -1,0 +1,225 @@
+/* LegalDesk eCourts Importer - Floating UI */
+
+#legaldesk-fab {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 999999;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+#legaldesk-fab-btn {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.4);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+#legaldesk-fab-btn:hover {
+  transform: scale(1.08);
+  box-shadow: 0 6px 20px rgba(37, 99, 235, 0.5);
+}
+
+#legaldesk-panel {
+  position: fixed;
+  bottom: 90px;
+  right: 24px;
+  width: 380px;
+  max-height: 520px;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #e5e7eb;
+}
+
+#legaldesk-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  color: white;
+  font-size: 14px;
+}
+
+#legaldesk-close {
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+  opacity: 0.8;
+}
+#legaldesk-close:hover {
+  opacity: 1;
+}
+
+#legaldesk-panel-body {
+  padding: 16px;
+  overflow-y: auto;
+  max-height: 420px;
+  font-size: 13px;
+  color: #374151;
+}
+
+#legaldesk-status {
+  margin-bottom: 12px;
+  font-weight: 500;
+  color: #111827;
+}
+
+#legaldesk-results {
+  margin-bottom: 12px;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.legaldesk-case-card {
+  padding: 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+}
+
+.legaldesk-case-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.legaldesk-case-row:hover {
+  background: #f3f4f6;
+}
+
+.legaldesk-case-check {
+  margin-top: 3px;
+  width: 16px;
+  height: 16px;
+  accent-color: #2563eb;
+  flex-shrink: 0;
+}
+
+.legaldesk-case-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.legaldesk-case-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: #111827;
+  font-family: monospace;
+}
+
+.legaldesk-case-parties {
+  font-size: 12px;
+  color: #6b7280;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.legaldesk-case-meta {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: #9ca3af;
+  flex-wrap: wrap;
+}
+
+.legaldesk-badge {
+  background: #dbeafe;
+  color: #1d4ed8;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+#legaldesk-server-url-group {
+  margin-bottom: 10px;
+}
+#legaldesk-server-url-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #374151;
+  margin-bottom: 4px;
+}
+#legaldesk-server-url {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  box-sizing: border-box;
+}
+#legaldesk-server-url:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+#legaldesk-send-btn {
+  width: 100%;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #2563eb, #4f46e5);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+#legaldesk-send-btn:hover {
+  opacity: 0.9;
+}
+#legaldesk-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.legaldesk-success {
+  padding: 10px;
+  background: #ecfdf5;
+  color: #065f46;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-top: 10px;
+}
+
+.legaldesk-error {
+  padding: 10px;
+  background: #fef2f2;
+  color: #991b1b;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-top: 10px;
+}
+
+.legaldesk-loading {
+  padding: 10px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  margin-top: 10px;
+}

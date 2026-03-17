@@ -11,12 +11,23 @@ import { format } from "date-fns";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
 
+interface DocumentItem {
+  id: string;
+  title: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  createdAt: string;
+  case?: { caseNumber: string; title: string } | null;
+}
+
 interface Message {
   id: string;
   role: string;
   content: string;
   sources?: string;
   formatSampleId?: string;
+  documents?: DocumentItem[];
   createdAt: string;
 }
 
@@ -96,9 +107,15 @@ export default function ChatPage() {
             content: data.message,
             sources: data.sources ? JSON.stringify(data.sources) : undefined,
             formatSampleId: data.formatSampleId || undefined,
+            documents: data.documents || undefined,
             createdAt: new Date().toISOString(),
           },
         ]);
+        if (data.actionResult?.success) {
+          toast.success(data.actionResult.message);
+        } else if (data.actionResult && !data.actionResult.success) {
+          toast.error(data.actionResult.message);
+        }
       } else {
         toast.error(data.error || "Failed to get response");
         setMessages((prev) => prev.filter((m) => !m.id.startsWith("temp-")));
@@ -136,6 +153,40 @@ export default function ChatPage() {
     } catch {
       toast.error("Export failed");
     }
+  };
+
+  const handleDocDownload = async (docId: string, fileName: string) => {
+    try {
+      const res = await fetch(`/api/documents/${docId}/download`);
+      if (!res.ok) {
+        toast.error("Download failed");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Download failed");
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  const getFileIcon = (fileType: string) => {
+    if (fileType.includes("pdf")) return "PDF";
+    if (fileType.includes("word") || fileType.includes("docx")) return "DOCX";
+    if (fileType.includes("text")) return "TXT";
+    return "FILE";
   };
 
   useEffect(() => {
@@ -245,6 +296,43 @@ export default function ChatPage() {
                             Format applied
                           </Badge>
                         )}
+                      </div>
+                    )}
+                    {msg.documents && msg.documents.length > 0 && (
+                      <div className="mt-2 pt-2 border-t border-border/50">
+                        <p className="text-xs font-medium mb-2">Documents available for download:</p>
+                        <div className="space-y-1.5">
+                          {msg.documents.map((doc) => (
+                            <div
+                              key={doc.id}
+                              className="flex items-center justify-between gap-2 p-2 rounded-md bg-background border text-xs"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <div className="flex-shrink-0 w-9 h-9 rounded bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold">
+                                  {getFileIcon(doc.fileType)}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="font-medium truncate">{doc.title}</p>
+                                  <p className="text-muted-foreground truncate">
+                                    {doc.fileName} &middot; {formatFileSize(doc.fileSize)}
+                                    {doc.case && ` · ${doc.case.caseNumber}`}
+                                  </p>
+                                </div>
+                              </div>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs flex-shrink-0"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDocDownload(doc.id, doc.fileName);
+                                }}
+                              >
+                                <Download className="mr-1 h-3 w-3" /> Download
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                     {msg.sources && (

@@ -1,13 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Briefcase, FileText, Calendar, BookOpen, FileSignature } from "lucide-react";
-import { format } from "date-fns";
+import { Users, Briefcase, FileText, Calendar, BookOpen, FileSignature, Clock, CalendarCheck, CalendarDays, CalendarClock } from "lucide-react";
+import { format, isToday, isTomorrow, addDays, startOfDay } from "date-fns";
 import Link from "next/link";
 import { EcourtsSyncButton } from "@/components/ecourts-sync-button";
 
 export default async function DashboardPage() {
-  const [clientCount, caseCount, documentCount, upcomingHearings, recentDiary, pendingNotices] =
+  const [clientCount, caseCount, documentCount, upcomingHearings, recentDiary, pendingNotices, scheduleEvents] =
     await Promise.all([
       prisma.client.count({ where: { isActive: true } }),
       prisma.case.count({ where: { status: { not: "CLOSED" } } }),
@@ -27,7 +27,29 @@ export default async function DashboardPage() {
         include: { case: true },
       }),
       prisma.notice.count({ where: { status: "PENDING_APPROVAL" } }),
+      prisma.scheduleEvent.findMany({
+        where: {
+          date: { gte: startOfDay(new Date()) },
+        },
+        orderBy: { date: "asc" },
+        take: 30,
+      }),
     ]);
+
+  // Group schedule events into Kanban columns
+  const today = new Date();
+  const endOfThisWeek = addDays(startOfDay(today), 7);
+
+  const todayEvents = scheduleEvents.filter((e) => isToday(new Date(e.date)));
+  const tomorrowEvents = scheduleEvents.filter((e) => isTomorrow(new Date(e.date)));
+  const thisWeekEvents = scheduleEvents.filter((e) => {
+    const d = new Date(e.date);
+    return !isToday(d) && !isTomorrow(d) && d <= endOfThisWeek;
+  });
+  const laterEvents = scheduleEvents.filter((e) => {
+    const d = new Date(e.date);
+    return d > endOfThisWeek;
+  });
 
   const stats = [
     { label: "Active Clients", value: clientCount, icon: Users, href: "/clients", color: "bg-blue-500" },
@@ -133,6 +155,148 @@ export default async function DashboardPage() {
             )}
           </CardContent>
         </Card>
+      </div>
+
+      {/* Schedule Events Kanban Board */}
+      <Card className="overflow-hidden p-0">
+        <CardHeader className="bg-indigo-500 text-white px-6 pt-4 pb-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-white">
+              <CalendarDays className="h-5 w-5" />
+              Schedule
+            </CardTitle>
+            <Link href="/schedule" className="text-xs text-white/80 hover:text-white transition-colors">
+              View Calendar →
+            </Link>
+          </div>
+        </CardHeader>
+        <CardContent className="px-4 py-4">
+          {scheduleEvents.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">No upcoming events</p>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {/* Today */}
+              <KanbanColumn
+                title="Today"
+                icon={<CalendarCheck className="h-4 w-4" />}
+                events={todayEvents}
+                color="bg-red-50 border-red-200"
+                badgeColor="bg-red-100 text-red-700"
+                count={todayEvents.length}
+              />
+              {/* Tomorrow */}
+              <KanbanColumn
+                title="Tomorrow"
+                icon={<Clock className="h-4 w-4" />}
+                events={tomorrowEvents}
+                color="bg-orange-50 border-orange-200"
+                badgeColor="bg-orange-100 text-orange-700"
+                count={tomorrowEvents.length}
+              />
+              {/* This Week */}
+              <KanbanColumn
+                title="This Week"
+                icon={<CalendarDays className="h-4 w-4" />}
+                events={thisWeekEvents}
+                color="bg-blue-50 border-blue-200"
+                badgeColor="bg-blue-100 text-blue-700"
+                count={thisWeekEvents.length}
+              />
+              {/* Later */}
+              <KanbanColumn
+                title="Later"
+                icon={<CalendarClock className="h-4 w-4" />}
+                events={laterEvents}
+                color="bg-gray-50 border-gray-200"
+                badgeColor="bg-gray-100 text-gray-700"
+                count={laterEvents.length}
+              />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+const EVENT_TYPE_COLORS: Record<string, string> = {
+  HEARING: "bg-blue-100 text-blue-700 border-blue-200",
+  MEETING: "bg-green-100 text-green-700 border-green-200",
+  DEADLINE: "bg-red-100 text-red-700 border-red-200",
+  REMINDER: "bg-yellow-100 text-yellow-700 border-yellow-200",
+  OTHER: "bg-gray-100 text-gray-700 border-gray-200",
+};
+
+function KanbanColumn({
+  title,
+  icon,
+  events,
+  color,
+  badgeColor,
+  count,
+}: {
+  title: string;
+  icon: React.ReactNode;
+  events: {
+    id: string;
+    title: string;
+    date: Date;
+    endDate: Date | null;
+    eventType: string;
+    description: string | null;
+    caseId: string | null;
+    isAllDay: boolean;
+  }[];
+  color: string;
+  badgeColor: string;
+  count: number;
+}) {
+  return (
+    <div className={`rounded-lg border p-3 min-h-[200px] max-h-[400px] flex flex-col ${color}`}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-1.5 font-semibold text-sm text-gray-900">
+          {icon}
+          {title}
+        </div>
+        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${badgeColor}`}>
+          {count}
+        </span>
+      </div>
+      <div className="space-y-2 overflow-y-auto flex-1">
+        {events.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-6">No events</p>
+        ) : (
+          events.map((event) => (
+            <Link key={event.id} href="/schedule">
+              <div className="bg-white rounded-md border border-gray-200 p-2.5 shadow-sm hover:shadow-md transition-shadow cursor-pointer">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] px-1.5 py-0 ${EVENT_TYPE_COLORS[event.eventType] || EVENT_TYPE_COLORS.OTHER}`}
+                  >
+                    {event.eventType}
+                  </Badge>
+                  {event.isAllDay && (
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                      All Day
+                    </Badge>
+                  )}
+                </div>
+                <p className="text-xs font-semibold text-gray-900 truncate">{event.title}</p>
+                {event.description && (
+                  <p className="text-[11px] text-gray-600 mt-1 truncate">
+                    {event.description}
+                  </p>
+                )}
+                <p className="text-[10px] text-gray-500 mt-1">
+                  {event.isAllDay
+                    ? format(new Date(event.date), "dd MMM")
+                    : format(new Date(event.date), "dd MMM, h:mm a")}
+                </p>
+              </div>
+            </Link>
+          ))
+        )}
       </div>
     </div>
   );

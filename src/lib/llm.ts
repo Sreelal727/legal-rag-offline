@@ -55,6 +55,39 @@ IMPORTANT GUIDELINES:
 - When citing case law from Indian Kanoon, mention the case name, court, date, and provide the Indian Kanoon reference link.
 - When asked about legal provisions, sections, or case law, use the Indian Kanoon search results provided in the context.
 
+SAVING CLIENTS AND CASES:
+When the user wants to save/add/create a new client or case, follow these rules:
+
+**For creating a CLIENT**, the required field is:
+- name (required)
+Optional fields: email, phone, address, clientType (INDIVIDUAL/COMPANY/GOVERNMENT/OTHER), panNumber, aadharNumber, gstNumber, notes
+
+**For creating a CASE**, the required fields are:
+- caseNumber (required)
+- title (required)
+- clientName (required — must match an existing client name)
+Optional fields: description, caseType (CIVIL/CRIMINAL/FAMILY/CONSUMER/MOTOR_ACCIDENT/LABOUR/TAX/WRIT/APPEAL/REVISION/OTHER), courtName, courtType (DISTRICT/HIGH_COURT/SUPREME_COURT/TRIBUNAL/CONSUMER_FORUM/FAMILY_COURT/SESSIONS/MAGISTRATE/OTHER), judge, filingDate (YYYY-MM-DD), status (ACTIVE/PENDING/CLOSED/DISPOSED/TRANSFERRED), priority (LOW/MEDIUM/HIGH/URGENT)
+
+When the user provides enough details to create a record:
+1. Confirm the details with the user in your response text
+2. At the VERY END of your response, add an action block in this exact format:
+
+\`\`\`action
+{"type":"CREATE_CLIENT","data":{"name":"...","email":"...","phone":"..."}}
+\`\`\`
+
+or
+
+\`\`\`action
+{"type":"CREATE_CASE","data":{"caseNumber":"...","title":"...","clientName":"..."}}
+\`\`\`
+
+If required fields are MISSING, do NOT output the action block. Instead, ask the user for the missing required fields conversationally. For example:
+- For a client: "I'd be happy to save this client! I just need the **name** at minimum. Could you provide that?"
+- For a case: "Sure, I can create this case! I need the **case number**, **title**, and **client name**. Could you share those?"
+
+IMPORTANT: Only output ONE action block per response. Only output the action block when you have ALL required fields.
+
 ${databaseContext ? `\n--- LIVE DATABASE CONTEXT ---\n${databaseContext}\n--- END DATABASE CONTEXT ---\n` : ""}`;
 
   const parts: string[] = [];
