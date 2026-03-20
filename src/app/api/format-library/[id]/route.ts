@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withAuth } from "@/lib/api-utils";
+import { deleteFormatChunks } from "@/lib/rag/vectorstore";
 import { unlinkSync, existsSync } from "fs";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -46,6 +47,13 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   // Delete file from disk
   if (existsSync(sample.filePath)) {
     try { unlinkSync(sample.filePath); } catch {}
+  }
+
+  // Remove from ChromaDB format index
+  try {
+    await deleteFormatChunks(id);
+  } catch {
+    // ChromaDB might not be running or collection might not exist
   }
 
   await prisma.formatSample.delete({ where: { id } });

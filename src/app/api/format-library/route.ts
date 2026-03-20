@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withAuth } from "@/lib/api-utils";
-import { extractTextFromDocx } from "@/lib/docx-extract";
+import { extractStructuredContent } from "@/lib/docx-extract";
+import { processFormatSample } from "@/lib/rag/format-pipeline";
 import { writeFileSync, mkdirSync, existsSync } from "fs";
 import { join } from "path";
 
@@ -44,8 +45,8 @@ export async function POST(request: NextRequest) {
 
   const fileName = file.name;
   const ext = fileName.split(".").pop()?.toLowerCase();
-  if (!ext || !["doc", "docx"].includes(ext)) {
-    return NextResponse.json({ error: "Only .doc and .docx files are supported" }, { status: 400 });
+  if (!ext || !["doc", "docx", "pdf"].includes(ext)) {
+    return NextResponse.json({ error: "Only .doc, .docx, and .pdf files are supported" }, { status: 400 });
   }
 
   // Save file to disk
@@ -58,10 +59,13 @@ export async function POST(request: NextRequest) {
   const buffer = Buffer.from(await file.arrayBuffer());
   writeFileSync(filePath, buffer);
 
-  // Extract text content
+  // Extract structured content (markdown for DOCX, text for PDF/DOC)
   let textContent = "";
+  let contentFormat: "markdown" | "text" = "text";
   try {
-    textContent = await extractTextFromDocx(filePath);
+    const extracted = await extractStructuredContent(filePath, fileName);
+    textContent = extracted.text;
+    contentFormat = extracted.format;
   } catch {
     textContent = "[Text extraction failed - file stored for reference]";
   }
@@ -79,5 +83,15 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  return NextResponse.json(sample, { status: 201 });
+  // Index format sample into ChromaDB for semantic search (non-blocking)
+  if (textContent && !textContent.startsWith("[Text extraction failed")) {
+    processFormatSample(sample.id).catch((err) => {
+      console.error(`Failed to index format sample ${sample.id}:`, err);
+    });
+  }
+
+  return NextResponse.json(
+    { ...sample, contentFormat },
+    { status: 201 }
+  );
 }

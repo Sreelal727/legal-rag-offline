@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withAuth } from "@/lib/api-utils";
 import { semanticSearch } from "@/lib/rag/pipeline";
+import { searchFormats } from "@/lib/rag/format-pipeline";
 import { chatCompletion, buildRAGPrompt } from "@/lib/llm";
 import { searchAndSummarize } from "@/lib/indian-kanoon";
 import { format } from "date-fns";
@@ -253,7 +254,7 @@ export async function POST(request: NextRequest) {
     console.error("Semantic search failed:", err);
   }
 
-  // Check if this is a document drafting request — if so, find matching format samples
+  // Check if this is a document drafting request — if so, find matching format samples via semantic search
   const q = message.toLowerCase();
   const draftKeywords = ["draft", "prepare", "write", "create", "generate", "format", "notice", "petition", "affidavit", "suit", "application", "complaint", "reply", "statement", "scrutiny"];
   const isDraftRequest = draftKeywords.some((kw) => q.includes(kw));
@@ -261,51 +262,60 @@ export async function POST(request: NextRequest) {
 
   if (isDraftRequest) {
     try {
-      const formatSamples = await prisma.formatSample.findMany({
-        where: { isActive: true },
-        select: { id: true, name: true, category: true, subcategory: true, textContent: true },
-        take: 3,
-      });
+      // Use semantic search on ChromaDB "legal_formats" collection
+      const formatResults = await searchFormats(message, 2);
 
-      // Try to find the most relevant format sample based on message content
-      const categoryMap: Record<string, string[]> = {
-        LEGAL_NOTICE: ["notice", "legal notice", "cheque bounce", "138", "recovery"],
-        BANK_SCRUTINY_REPORT: ["bank", "scrutiny", "account", "transaction"],
-        SUIT_FORMAT: ["suit", "civil suit", "plaint"],
-        FAMILY_COURT_PETITION: ["family", "divorce", "custody", "maintenance", "domestic"],
-        COUNTER_STATEMENT: ["counter", "reply", "written statement", "defence"],
-        AFFIDAVIT: ["affidavit", "sworn", "declaration"],
-        MACT_WRITTEN_STATEMENT: ["mact", "motor accident", "accident claim"],
-        INTERLOCUTORY_APPLICATION: ["interlocutory", "interim", "application", "ia"],
-        DLSA_PETITION: ["dlsa", "legal aid", "legal services"],
-        EXECUTION_PETITION: ["execution", "decree", "enforce"],
-        COMMERCIAL_SUIT: ["commercial", "commercial suit", "trade"],
-      };
+      if (formatResults.length > 0) {
+        matchedFormatSampleId = formatResults[0].formatSampleId;
 
-      let matchedSamples = formatSamples;
-      for (const [category, keywords] of Object.entries(categoryMap)) {
-        if (keywords.some((kw) => q.includes(kw))) {
-          const categoryMatch = await prisma.formatSample.findMany({
-            where: { isActive: true, category },
-            select: { id: true, name: true, category: true, subcategory: true, textContent: true },
-            take: 2,
-          });
-          if (categoryMatch.length > 0) {
-            matchedSamples = categoryMatch;
-            break;
-          }
+        // Fetch full text content from DB for the matched formats
+        const matchedIds = formatResults.map((r) => r.formatSampleId);
+        const fullSamples = await prisma.formatSample.findMany({
+          where: { id: { in: matchedIds }, isActive: true },
+          select: { id: true, name: true, category: true, subcategory: true, textContent: true },
+        });
+
+        if (fullSamples.length > 0) {
+          const formatContext = fullSamples.map((s) => {
+            const relevance = formatResults.find((r) => r.formatSampleId === s.id);
+            const score = relevance ? ((1 - relevance.bestDistance) * 100).toFixed(1) : "N/A";
+            return `[Format: ${s.name} | Category: ${s.category}${s.subcategory ? ` | Sub: ${s.subcategory}` : ""} | Relevance: ${score}%]\n${s.textContent.substring(0, 4000)}`;
+          }).join("\n\n---\n\n");
+          docContext.push(`FORMAT LIBRARY SAMPLES (use these as structural references for drafting):\n${formatContext}`);
         }
-      }
+      } else {
+        // Fallback: if ChromaDB has no indexed formats, use DB keyword matching
+        const fallbackSamples = await prisma.formatSample.findMany({
+          where: { isActive: true },
+          select: { id: true, name: true, category: true, subcategory: true, textContent: true },
+          take: 2,
+        });
 
-      if (matchedSamples.length > 0) {
-        matchedFormatSampleId = matchedSamples[0].id;
-        const formatContext = matchedSamples.map((s) =>
-          `[Format: ${s.name} | Category: ${s.category}${s.subcategory ? ` | Sub: ${s.subcategory}` : ""}]\n${s.textContent.substring(0, 3000)}`
-        ).join("\n\n---\n\n");
-        docContext.push(`FORMAT LIBRARY SAMPLES (use these as structural references for drafting):\n${formatContext}`);
+        if (fallbackSamples.length > 0) {
+          matchedFormatSampleId = fallbackSamples[0].id;
+          const formatContext = fallbackSamples.map((s) =>
+            `[Format: ${s.name} | Category: ${s.category}${s.subcategory ? ` | Sub: ${s.subcategory}` : ""}]\n${s.textContent.substring(0, 3000)}`
+          ).join("\n\n---\n\n");
+          docContext.push(`FORMAT LIBRARY SAMPLES (use these as structural references for drafting):\n${formatContext}`);
+        }
       }
     } catch (err) {
       console.error("Format sample lookup failed:", err);
+      // Fallback to simple DB query if semantic search fails
+      try {
+        const fallbackSamples = await prisma.formatSample.findMany({
+          where: { isActive: true },
+          select: { id: true, name: true, category: true, subcategory: true, textContent: true },
+          take: 2,
+        });
+        if (fallbackSamples.length > 0) {
+          matchedFormatSampleId = fallbackSamples[0].id;
+          const formatContext = fallbackSamples.map((s) =>
+            `[Format: ${s.name} | Category: ${s.category}]\n${s.textContent.substring(0, 3000)}`
+          ).join("\n\n---\n\n");
+          docContext.push(`FORMAT LIBRARY SAMPLES:\n${formatContext}`);
+        }
+      } catch {}
     }
   }
 

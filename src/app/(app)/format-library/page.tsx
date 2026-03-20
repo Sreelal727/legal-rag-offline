@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, FileText, Trash2, Eye, Upload, Loader2 } from "lucide-react";
+import { Plus, Search, FileText, Trash2, Eye, Upload, Loader2, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/role-gate";
 
@@ -61,6 +61,7 @@ export default function FormatLibraryPage() {
   const [uploadOpen, setUploadOpen] = useState(false);
   const [previewSample, setPreviewSample] = useState<FormatSample | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [reindexing, setReindexing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Upload form state
@@ -142,6 +143,22 @@ export default function FormatLibraryPage() {
     }
   };
 
+  const handleReindex = async () => {
+    setReindexing(true);
+    try {
+      const res = await fetch("/api/format-library/reindex", { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        toast.success(`Re-indexed ${data.indexed} formats (${data.details.reduce((s: number, d: any) => s + (d.chunks || 0), 0)} chunks)`);
+      } else {
+        toast.error("Re-index failed");
+      }
+    } catch {
+      toast.error("Re-index failed");
+    }
+    setReindexing(false);
+  };
+
   const resetUploadForm = () => {
     setUploadName("");
     setUploadCategory("");
@@ -176,6 +193,18 @@ export default function FormatLibraryPage() {
           </p>
         </div>
         <RoleGate permission="settings:write">
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={handleReindex}
+              disabled={reindexing}
+            >
+              {reindexing ? (
+                <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Re-indexing...</>
+              ) : (
+                <><RefreshCw className="mr-2 h-4 w-4" /> Re-index AI</>
+              )}
+            </Button>
           <Dialog
             open={uploadOpen}
             onOpenChange={(v) => {
@@ -194,7 +223,7 @@ export default function FormatLibraryPage() {
               </DialogHeader>
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Document File (.doc / .docx)</Label>
+                  <Label>Document File (.doc / .docx / .pdf)</Label>
                   <div
                     className="relative flex items-center gap-3 rounded-md border border-input bg-background px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors"
                     onClick={() => fileInputRef.current?.click()}
@@ -202,13 +231,13 @@ export default function FormatLibraryPage() {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept=".doc,.docx"
+                      accept=".doc,.docx,.pdf"
                       className="sr-only"
                       onChange={(e) => {
                         const file = e.target.files?.[0];
                         if (file) {
                           setUploadFile(file);
-                          if (!uploadName) setUploadName(file.name.replace(/\.(docx?|DOC)$/, ""));
+                          if (!uploadName) setUploadName(file.name.replace(/\.(docx?|DOC|pdf|PDF)$/, ""));
                         }
                       }}
                     />
@@ -289,6 +318,7 @@ export default function FormatLibraryPage() {
               </div>
             </DialogContent>
           </Dialog>
+          </div>
         </RoleGate>
       </div>
 
