@@ -276,12 +276,11 @@ export async function POST(request: NextRequest) {
         });
 
         if (fullSamples.length > 0) {
-          const formatContext = fullSamples.map((s) => {
-            const relevance = formatResults.find((r) => r.formatSampleId === s.id);
-            const score = relevance ? ((1 - relevance.bestDistance) * 100).toFixed(1) : "N/A";
-            return `[Format: ${s.name} | Category: ${s.category}${s.subcategory ? ` | Sub: ${s.subcategory}` : ""} | Relevance: ${score}%]\n${s.textContent.substring(0, 4000)}`;
-          }).join("\n\n---\n\n");
-          docContext.push(`FORMAT LIBRARY SAMPLES (use these as structural references for drafting):\n${formatContext}`);
+          // Send the FULL format text — do NOT truncate. The AI needs the complete
+          // format to replicate it exactly (tables, all fields, declaration, prayer, etc.)
+          const bestSample = fullSamples[0]; // Use the best matching format
+          const formatContext = `[FORMAT TO FOLLOW EXACTLY: ${bestSample.name} | Category: ${bestSample.category}${bestSample.subcategory ? ` | Sub: ${bestSample.subcategory}` : ""}]\n\n${bestSample.textContent}`;
+          docContext.push(`FORMAT LIBRARY SAMPLE — YOU MUST REPLICATE THIS EXACT STRUCTURE:\n${formatContext}`);
         }
       } else {
         // Fallback: if ChromaDB has no indexed formats, use DB keyword matching
@@ -293,10 +292,9 @@ export async function POST(request: NextRequest) {
 
         if (fallbackSamples.length > 0) {
           matchedFormatSampleId = fallbackSamples[0].id;
-          const formatContext = fallbackSamples.map((s) =>
-            `[Format: ${s.name} | Category: ${s.category}${s.subcategory ? ` | Sub: ${s.subcategory}` : ""}]\n${s.textContent.substring(0, 3000)}`
-          ).join("\n\n---\n\n");
-          docContext.push(`FORMAT LIBRARY SAMPLES (use these as structural references for drafting):\n${formatContext}`);
+          const bestSample = fallbackSamples[0];
+          const formatContext = `[FORMAT TO FOLLOW EXACTLY: ${bestSample.name} | Category: ${bestSample.category}${bestSample.subcategory ? ` | Sub: ${bestSample.subcategory}` : ""}]\n\n${bestSample.textContent}`;
+          docContext.push(`FORMAT LIBRARY SAMPLE — YOU MUST REPLICATE THIS EXACT STRUCTURE:\n${formatContext}`);
         }
       }
     } catch (err) {
@@ -306,14 +304,13 @@ export async function POST(request: NextRequest) {
         const fallbackSamples = await prisma.formatSample.findMany({
           where: { isActive: true },
           select: { id: true, name: true, category: true, subcategory: true, textContent: true },
-          take: 2,
+          take: 1,
         });
         if (fallbackSamples.length > 0) {
           matchedFormatSampleId = fallbackSamples[0].id;
-          const formatContext = fallbackSamples.map((s) =>
-            `[Format: ${s.name} | Category: ${s.category}]\n${s.textContent.substring(0, 3000)}`
-          ).join("\n\n---\n\n");
-          docContext.push(`FORMAT LIBRARY SAMPLES:\n${formatContext}`);
+          const bestSample = fallbackSamples[0];
+          const formatContext = `[FORMAT TO FOLLOW EXACTLY: ${bestSample.name} | Category: ${bestSample.category}]\n\n${bestSample.textContent}`;
+          docContext.push(`FORMAT LIBRARY SAMPLE — YOU MUST REPLICATE THIS EXACT STRUCTURE:\n${formatContext}`);
         }
       } catch {}
     }

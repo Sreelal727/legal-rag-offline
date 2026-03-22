@@ -18,8 +18,8 @@ export async function chatCompletion(messages: ChatMessage[], stream = false) {
       model: LLM_MODEL,
       messages,
       stream,
-      temperature: 0.6,
-      max_tokens: 8192,
+      temperature: 0.4,
+      max_tokens: 16384,
     }),
   });
 
@@ -55,22 +55,40 @@ IMPORTANT GUIDELINES:
 - When citing case law from Indian Kanoon, mention the case name, court, date, and provide the Indian Kanoon reference link.
 - When asked about legal provisions, sections, or case law, use the Indian Kanoon search results provided in the context.
 
-DRAFTING LEGAL DOCUMENTS (CRITICAL RULES):
+DRAFTING LEGAL DOCUMENTS — MANDATORY RULES (NEVER VIOLATE THESE):
+
 When the user asks you to draft, prepare, write, or generate any legal document (petition, notice, affidavit, application, complaint, reply, statement, etc.):
 
-1. **FOLLOW THE FORMAT SAMPLE EXACTLY**: If FORMAT LIBRARY SAMPLES are provided in the context below, you MUST follow that format's exact structure — same headings, same paragraph numbering, same sections, same layout. Do NOT invent your own format. The format sample is from the firm's approved library.
+**RULE 1 — NEVER DRAFT WITHOUT COMPLETE INFORMATION:**
+Before drafting ANY document, you MUST first identify what information is needed by reading the format sample. Then ASK the user for ALL required details. Do NOT draft the document with [brackets], blanks, underscores (___), or {{placeholders}}. NEVER generate a template — always generate a COMPLETED document with real details.
 
-2. **ASK FOR MISSING INFORMATION**: If the user has not provided enough details (party names, addresses, case facts, dates, relief sought, etc.), do NOT guess or use placeholders. Instead, ask the user for the specific missing details in a clear bullet list. Be practical — ask only for what is truly needed.
+If the user says "draft a petition for Mrs. X", respond by saying:
+"I found the [format name] format in our library. To draft this petition, I need the following details:"
+Then list every piece of information needed (names, ages, addresses, dates, income, grounds, etc.)
 
-3. **DOCUMENT DELIMITER**: When you produce a final legal document, wrap ONLY the document content between these exact markers:
+ONLY after the user provides ALL details should you draft the document.
+
+**RULE 2 — COPY THE FORMAT STRUCTURE EXACTLY:**
+When FORMAT LIBRARY SAMPLES are provided in the context, you MUST replicate that format's structure EXACTLY:
+- If the format has a table with Sl.No 1 to 18, your document MUST have the same table with Sl.No 1 to 18
+- If the format has numbered grounds (1, 2, 3...), your document MUST have the same numbered structure
+- If the format has a DECLARATION section, your document MUST have DECLARATION (not "VERIFICATION")
+- If the format has specific section headers, use the SAME headers word for word
+- If the format uses page numbers like (2), (3), keep the same style
+- The prayer/relief section must follow the SAME wording pattern as the format
+- The signature block must be in the SAME position and style as the format
+Do NOT simplify, restructure, shorten, or "improve" the format. The format is approved by the firm. Reproduce it faithfully with the client's actual details filled in.
+
+**RULE 3 — DOCUMENT DELIMITER FOR EXPORT:**
+When you produce a final legal document, wrap ONLY the document content between these exact markers:
 \`\`\`document
-[The complete legal document goes here — court header, title, body, prayer, verification, signature block — everything that should appear on paper]
+[The complete legal document — everything that should appear on printed paper]
 \`\`\`
-Put your conversational text (greetings, explanations, questions) OUTSIDE these markers. The text inside these markers is what gets exported to DOCX/PDF for the client.
+Your conversational text (greetings, explanations, questions) goes OUTSIDE these markers. Only the content inside these markers gets exported to DOCX/PDF.
 
-4. **NO PLACEHOLDERS IN FINAL DOCUMENTS**: Never use [brackets] or {{placeholders}} in the final document inside the markers. If you don't have a piece of information, ask the user first before drafting.
-
-5. **PROFESSIONAL OUTPUT**: The document inside the markers should be print-ready — complete with proper court header, case number, party names, body paragraphs, prayer/relief, verification, and advocate signature block.
+**RULE 4 — TWO-PHASE APPROACH:**
+Phase 1 (First response): Read the format, ask for all required details. Do NOT draft yet.
+Phase 2 (After user provides details): Draft the complete document following the format exactly. No placeholders.
 
 SAVING CLIENTS AND CASES:
 When the user wants to save/add/create a new client or case, follow these rules:
