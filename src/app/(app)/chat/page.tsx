@@ -25,6 +25,7 @@ interface Message {
   id: string;
   role: string;
   content: string;
+  documentContent?: string;
   sources?: string;
   formatSampleId?: string;
   documents?: DocumentItem[];
@@ -105,6 +106,7 @@ export default function ChatPage() {
             id: `assistant-${Date.now()}`,
             role: "ASSISTANT",
             content: data.message,
+            documentContent: data.documentContent || undefined,
             sources: data.sources ? JSON.stringify(data.sources) : undefined,
             formatSampleId: data.formatSampleId || undefined,
             documents: data.documents || undefined,
@@ -266,7 +268,7 @@ export default function ChatPage() {
                         <ReactMarkdown>{msg.content}</ReactMarkdown>
                       </div>
                     )}
-                    {msg.role === "ASSISTANT" && msg.content.length > 300 && (
+                    {msg.role === "ASSISTANT" && (msg.documentContent || msg.content.length > 300) && (
                       <div className="mt-2 pt-2 border-t border-border/50 flex items-center gap-2">
                         <span className="text-xs text-muted-foreground">Export:</span>
                         <Button
@@ -275,7 +277,7 @@ export default function ChatPage() {
                           className="h-7 text-xs"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleExport(msg.content, "docx", msg.formatSampleId);
+                            handleExport(msg.documentContent || msg.content, "docx", msg.formatSampleId);
                           }}
                         >
                           <Download className="mr-1 h-3 w-3" /> DOCX
@@ -286,11 +288,16 @@ export default function ChatPage() {
                           className="h-7 text-xs"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleExport(msg.content, "pdf", msg.formatSampleId);
+                            handleExport(msg.documentContent || msg.content, "pdf", msg.formatSampleId);
                           }}
                         >
                           <Download className="mr-1 h-3 w-3" /> PDF
                         </Button>
+                        {msg.documentContent && (
+                          <Badge variant="outline" className="text-[10px] h-5 bg-green-500/10 text-green-600 border-green-500/30">
+                            Document ready
+                          </Badge>
+                        )}
                         {msg.formatSampleId && (
                           <Badge variant="outline" className="text-[10px] h-5">
                             Format applied

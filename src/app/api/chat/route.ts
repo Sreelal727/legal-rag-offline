@@ -428,9 +428,21 @@ export async function POST(request: NextRequest) {
   try {
     const response = await chatCompletion(messages);
 
-    // Parse action blocks from AI response
+    // Parse action blocks and document blocks from AI response
     let displayMessage = response;
+    let documentContent: string | null = null;
     let actionResult: { type: string; success: boolean; message: string; data?: any } | null = null;
+
+    // Extract document block (the actual legal document for export)
+    const docMatch = response.match(/```document\s*\n([\s\S]*?)\n```/);
+    if (docMatch) {
+      documentContent = docMatch[1].trim();
+      // Keep the document visible in chat but strip the code fence markers for display
+      displayMessage = displayMessage
+        .replace(/```document\s*\n/, "\n")
+        .replace(/\n```(\s*$|\s*\n)/, "\n")
+        .trim();
+    }
 
     const actionMatch = response.match(/```action\s*\n([\s\S]*?)\n```/);
     if (actionMatch) {
@@ -524,6 +536,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       sessionId: chatSession.id,
       message: displayMessage,
+      documentContent,
       sources,
       formatSampleId: matchedFormatSampleId,
       actionResult,
