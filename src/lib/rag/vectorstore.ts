@@ -3,11 +3,26 @@ import { ChromaClient, Collection } from "chromadb";
 let client: ChromaClient | null = null;
 let collection: Collection | null = null;
 let formatCollection: Collection | null = null;
+let chromaAvailable: boolean | null = null;
 
 const COLLECTION_NAME = "legal_documents";
 const FORMAT_COLLECTION_NAME = "legal_formats";
 
+async function isChromaAvailable(): Promise<boolean> {
+  if (chromaAvailable !== null) return chromaAvailable;
+  try {
+    const c = new ChromaClient({ path: process.env.CHROMA_PATH || "./chroma-data" });
+    await c.heartbeat();
+    chromaAvailable = true;
+  } catch {
+    console.warn("[ChromaDB] Not available — RAG features will be disabled. Start ChromaDB to enable semantic search.");
+    chromaAvailable = false;
+  }
+  return chromaAvailable;
+}
+
 export async function getChromaClient() {
+  if (!await isChromaAvailable()) return null;
   if (!client) {
     client = new ChromaClient({ path: process.env.CHROMA_PATH || "./chroma-data" });
   }
@@ -17,8 +32,10 @@ export async function getChromaClient() {
 // ─── Case Documents Collection ───
 
 export async function getCollection() {
+  if (!await isChromaAvailable()) return null;
   if (!collection) {
     const chromaClient = await getChromaClient();
+    if (!chromaClient) return null;
     collection = await chromaClient.getOrCreateCollection({
       name: COLLECTION_NAME,
       metadata: { "hnsw:space": "cosine" },
@@ -34,6 +51,7 @@ export async function addDocuments(
   metadatas: Record<string, string>[]
 ) {
   const col = await getCollection();
+  if (!col) return;
   await col.add({ ids, embeddings, documents, metadatas });
 }
 
@@ -43,6 +61,7 @@ export async function searchDocuments(
   filter?: Record<string, string>
 ) {
   const col = await getCollection();
+  if (!col) return { ids: [[]], documents: [[]], metadatas: [[]], distances: [[]] };
   const results = await col.query({
     queryEmbeddings: [queryEmbedding],
     nResults,
@@ -53,14 +72,17 @@ export async function searchDocuments(
 
 export async function deleteDocumentChunks(documentId: string) {
   const col = await getCollection();
+  if (!col) return;
   await col.delete({ where: { documentId } });
 }
 
 // ─── Format Library Collection ───
 
 export async function getFormatCollection() {
+  if (!await isChromaAvailable()) return null;
   if (!formatCollection) {
     const chromaClient = await getChromaClient();
+    if (!chromaClient) return null;
     formatCollection = await chromaClient.getOrCreateCollection({
       name: FORMAT_COLLECTION_NAME,
       metadata: { "hnsw:space": "cosine" },
@@ -76,6 +98,7 @@ export async function addFormatDocuments(
   metadatas: Record<string, string>[]
 ) {
   const col = await getFormatCollection();
+  if (!col) return;
   await col.add({ ids, embeddings, documents, metadatas });
 }
 
@@ -85,6 +108,7 @@ export async function searchFormatDocuments(
   filter?: Record<string, string>
 ) {
   const col = await getFormatCollection();
+  if (!col) return { ids: [[]], documents: [[]], metadatas: [[]], distances: [[]] };
   const results = await col.query({
     queryEmbeddings: [queryEmbedding],
     nResults,
@@ -95,5 +119,6 @@ export async function searchFormatDocuments(
 
 export async function deleteFormatChunks(formatSampleId: string) {
   const col = await getFormatCollection();
+  if (!col) return;
   await col.delete({ where: { formatSampleId } });
 }

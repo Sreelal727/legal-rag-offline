@@ -79,9 +79,11 @@ export default function LoginPage() {
               {loading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
-          <div className="mt-6 text-xs text-muted-foreground text-center space-y-1">
-            <p>Demo: admin@legalrag.com / admin123</p>
-          </div>
+          {process.env.NODE_ENV === "development" && (
+            <div className="mt-6 text-xs text-muted-foreground text-center space-y-1">
+              <p>Demo: admin@legalrag.com / admin123</p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

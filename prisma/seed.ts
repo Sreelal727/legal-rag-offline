@@ -1,5 +1,9 @@
 import dotenv from "dotenv";
-dotenv.config();
+import path from "path";
+
+// Load .env.local first (Next.js convention), fall back to .env
+dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
+dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaLibSql } from "@prisma/adapter-libsql";
