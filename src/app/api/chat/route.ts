@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withAuth } from "@/lib/api-utils";
-import { semanticSearch } from "@/lib/rag/pipeline";
-import { searchFormats } from "@/lib/rag/format-pipeline";
+// Dynamic imports for RAG — these pull in chromadb/@xenova/transformers which crash on Vercel at module level
 import { chatCompletion, buildRAGPrompt } from "@/lib/llm";
 import { searchAndSummarize } from "@/lib/indian-kanoon";
 import { format } from "date-fns";
@@ -243,6 +242,7 @@ export async function POST(request: NextRequest) {
   let docContext: string[] = [];
   let sources: any[] = [];
   try {
+    const { semanticSearch } = await import("@/lib/rag/pipeline");
     const searchResults = await semanticSearch(message, caseId, 10);
     docContext = searchResults.map((r) => r.content).filter((c): c is string => c !== null);
     sources = searchResults.map((r) => ({
@@ -263,6 +263,7 @@ export async function POST(request: NextRequest) {
   if (isDraftRequest) {
     try {
       // Use semantic search on ChromaDB "legal_formats" collection
+      const { searchFormats } = await import("@/lib/rag/format-pipeline");
       const formatResults = await searchFormats(message, 2);
 
       if (formatResults.length > 0) {

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withAuth } from "@/lib/api-utils";
-import { processFormatSample } from "@/lib/rag/format-pipeline";
+// NOTE: Do NOT import format-pipeline at top level — it pulls in chromadb +
+// @xenova/transformers which crash on Vercel serverless. Use dynamic import.
 import { writeFileSync, mkdirSync, existsSync, unlinkSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -127,25 +128,46 @@ export async function POST(request: NextRequest) {
     // Store file data as base64 so it survives serverless ephemeral storage
     const fileDataBase64 = buffer.toString("base64");
 
-    const sample = await prisma.formatSample.create({
-      data: {
-        name,
-        category,
-        subcategory: subcategory || null,
-        description: description || null,
-        textContent,
-        filePath,
-        fileName,
-        fileSize: buffer.length,
-        fileData: fileDataBase64,
-      },
-    });
+    let sample;
+    try {
+      sample = await prisma.formatSample.create({
+        data: {
+          name,
+          category,
+          subcategory: subcategory || null,
+          description: description || null,
+          textContent,
+          filePath,
+          fileName,
+          fileSize: buffer.length,
+          fileData: fileDataBase64,
+        },
+      });
+    } catch (dbErr: any) {
+      // If fileData column doesn't exist yet (migration not run), retry without it
+      console.error("DB insert with fileData failed, retrying without:", dbErr?.message);
+      sample = await prisma.formatSample.create({
+        data: {
+          name,
+          category,
+          subcategory: subcategory || null,
+          description: description || null,
+          textContent,
+          filePath,
+          fileName,
+          fileSize: buffer.length,
+        },
+      });
+    }
 
     // Index format sample into ChromaDB for semantic search (non-blocking)
+    // Dynamic import to avoid loading chromadb/@xenova/transformers at module level
     if (textContent && !textContent.startsWith("[Text extraction failed")) {
-      processFormatSample(sample.id).catch((err) => {
-        console.error(`Failed to index format sample ${sample.id}:`, err);
-      });
+      import("@/lib/rag/format-pipeline")
+        .then(({ processFormatSample }) => processFormatSample(sample.id))
+        .catch((err) => {
+          console.error(`Failed to index format sample ${sample.id}:`, err);
+        });
     }
 
     return NextResponse.json(

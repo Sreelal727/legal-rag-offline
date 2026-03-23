@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/api-utils";
-import { reindexAllFormats } from "@/lib/rag/format-pipeline";
+// Dynamic import to avoid loading chromadb/@xenova/transformers at module level
+
+export const maxDuration = 60;
 
 /**
  * POST /api/format-library/reindex
@@ -12,6 +14,7 @@ export async function POST() {
   if (error) return error;
 
   try {
+    const { reindexAllFormats } = await import("@/lib/rag/format-pipeline");
     const results = await reindexAllFormats();
     const totalChunks = results.reduce((sum, r) => sum + (r.chunks || 0), 0);
     const failed = results.filter((r) => "error" in r);

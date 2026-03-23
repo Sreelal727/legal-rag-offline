@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Legal-RAG Presentation Poster</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  @page {
+    size: A3 portrait;
+    margin: 0;
+  }
+
+  body {
+    width: 297mm;
+    min-height: 420mm;
+    margin: 0 auto;
+    font-family: 'Inter', sans-serif;
+    background: #0a0e1a;
+    color: #ffffff;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .poster {
+    width: 100%;
+    min-height: 420mm;
+    padding: 40px 50px;
+    position: relative;
+    background:
+      radial-gradient(ellipse at 20% 0%, rgba(59, 130, 246, 0.15) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(168, 85, 247, 0.12) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 50%, rgba(14, 22, 42, 1) 0%, #0a0e1a 100%);
+  }
+
+  /* Decorative grid lines */
+  .poster::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-image:
+      linear-gradient(rgba(59, 130, 246, 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(59, 130, 246, 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+  }
+
+  /* Top accent bar */
+  .top-bar {
+    height: 5px;
+    background: linear-gradient(90deg, #3b82f6, #8b5cf6, #3b82f6);
+    position: absolute;
+    top: 0; left: 0; right: 0;
+  }
+
+  /* Header section */
+  .header {
+    text-align: center;
+    margin-bottom: 28px;
+    position: relative;
+  }
+
+  .invite-label {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: #60a5fa;
+    border: 1px solid rgba(96, 165, 250, 0.3);
+    padding: 8px 24px;
+    border-radius: 30px;
+    margin-bottom: 24px;
+    background: rgba(59, 130, 246, 0.08);
+  }
+
+  .main-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 62px;
+    font-weight: 900;
+    line-height: 1.1;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, #ffffff 0%, #93c5fd 50%, #c4b5fd 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .subtitle {
+    font-size: 17px;
+    font-weight: 300;
+    color: #94a3b8;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+  }
+
+  .tagline {
+    font-size: 22px;
+    font-weight: 600;
+    color: #e2e8f0;
+    margin-top: 14px;
+    line-height: 1.4;
+  }
+
+  .tagline em {
+    color: #60a5fa;
+    font-style: normal;
+  }
+
+  /* Divider */
+  .divider {
+    width: 80px;
+    height: 2px;
+    background: linear-gradient(90deg, #3b82f6, #8b5cf6);
+    margin: 24px auto;
+    border-radius: 2px;
+  }
+
+  /* Event details strip */
+  .event-strip {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    margin: 28px 0;
+    padding: 24px 0;
+    border-top: 1px solid rgba(255,255,255,0.06);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .event-item {
+    text-align: center;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .event-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    flex-shrink: 0;
+  }
+
+  .event-text {
+    text-align: left;
+  }
+
+  .event-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: #64748b;
+    font-weight: 600;
+  }
+
+  .event-value {
+    font-size: 17px;
+    font-weight: 700;
+    color: #f1f5f9;
+    margin-top: 2px;
+  }
+
+  /* Features grid */
+  .section-label {
+    text-align: center;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+    color: #8b5cf6;
+    font-weight: 600;
+    margin-bottom: 20px;
+  }
+
+  .features-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 28px;
+  }
+
+  .feature-card {
+    padding: 22px 24px;
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    transition: all 0.3s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .feature-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0;
+    width: 3px;
+    height: 100%;
+    background: linear-gradient(180deg, #3b82f6, #8b5cf6);
+    border-radius: 3px 0 0 3px;
+  }
+
+  .feature-icon {
+    font-size: 26px;
+    margin-bottom: 10px;
+    display: block;
+  }
+
+  .feature-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: #e2e8f0;
+    margin-bottom: 6px;
+  }
+
+  .feature-desc {
+    font-size: 12.5px;
+    color: #94a3b8;
+    line-height: 1.55;
+    font-weight: 400;
+  }
+
+  /* Highlight box */
+  .highlight-box {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(139, 92, 247, 0.08));
+    border: 1px solid rgba(96, 165, 250, 0.15);
+    border-radius: 20px;
+    padding: 28px 36px;
+    text-align: center;
+    margin-bottom: 28px;
+    position: relative;
+  }
+
+  .highlight-box h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    font-weight: 700;
+    color: #e2e8f0;
+    margin-bottom: 12px;
+  }
+
+  .highlight-items {
+    display: flex;
+    justify-content: center;
+    gap: 32px;
+    flex-wrap: wrap;
+  }
+
+  .highlight-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13.5px;
+    color: #cbd5e1;
+    font-weight: 500;
+  }
+
+  .check {
+    color: #34d399;
+    font-weight: 700;
+    font-size: 16px;
+  }
+
+  /* Audience strip */
+  .audience-section {
+    text-align: center;
+    margin-bottom: 28px;
+    padding: 22px 0;
+    border-top: 1px solid rgba(255,255,255,0.04);
+  }
+
+  .audience-section h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    margin-bottom: 14px;
+  }
+
+  .audience-tags {
+    display: flex;
+    justify-content: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .audience-tag {
+    padding: 8px 20px;
+    border-radius: 30px;
+    font-size: 13px;
+    font-weight: 500;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #cbd5e1;
+  }
+
+  /* CTA */
+  .cta-section {
+    text-align: center;
+    margin: 28px 0 20px;
+  }
+
+  .cta-button {
+    display: inline-block;
+    padding: 18px 60px;
+    font-size: 16px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    color: #ffffff;
+    background: linear-gradient(135deg, #3b82f6, #7c3aed);
+    border-radius: 50px;
+    text-decoration: none;
+    box-shadow:
+      0 4px 24px rgba(59, 130, 246, 0.3),
+      0 0 60px rgba(59, 130, 246, 0.1);
+    position: relative;
+  }
+
+  .cta-sub {
+    margin-top: 14px;
+    font-size: 13px;
+    color: #64748b;
+  }
+
+  .cta-sub strong {
+    color: #60a5fa;
+    font-weight: 600;
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    padding-top: 20px;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    margin-top: 10px;
+  }
+
+  .footer-brand {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: #64748b;
+    margin-bottom: 6px;
+  }
+
+  .footer-note {
+    font-size: 11.5px;
+    color: #475569;
+    line-height: 1.6;
+  }
+
+  .footer-note a {
+    color: #60a5fa;
+    text-decoration: none;
+  }
+
+  /* Stat callouts */
+  .stats-row {
+    display: flex;
+    justify-content: center;
+    gap: 48px;
+    margin: 24px 0;
+  }
+
+  .stat {
+    text-align: center;
+  }
+
+  .stat-number {
+    font-family: 'Playfair Display', serif;
+    font-size: 36px;
+    font-weight: 900;
+    background: linear-gradient(135deg, #60a5fa, #c084fc);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+  }
+
+  .stat-label {
+    font-size: 11px;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    font-weight: 600;
+    margin-top: 6px;
+  }
+
+  /* Bottom accent bar */
+  .bottom-bar {
+    height: 5px;
+    background: linear-gradient(90deg, #3b82f6, #8b5cf6, #3b82f6);
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+  }
+
+  @media print {
+    body {
+      width: 297mm;
+      min-height: 420mm;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="poster">
+  <div class="top-bar"></div>
+
+  <!-- Header -->
+  <div class="header">
+    <div class="invite-label">You Are Invited</div>
+    <h1 class="main-title">Legal-RAG</h1>
+    <p class="subtitle">AI-Powered Legal Practice Management System</p>
+    <div class="divider"></div>
+    <p class="tagline">Transforming How Advocates <em>Research, Manage &amp; Win</em> Cases</p>
+  </div>
+
+  <!-- Event Details -->
+  <div class="event-strip">
+    <div class="event-item">
+      <div class="event-icon">&#128197;</div>
+      <div class="event-text">
+        <div class="event-label">Date</div>
+        <div class="event-value">16 March 2026</div>
+      </div>
+    </div>
+    <div class="event-item">
+      <div class="event-icon">&#128336;</div>
+      <div class="event-text">
+        <div class="event-label">Time</div>
+        <div class="event-value">10:00 AM onwards</div>
+      </div>
+    </div>
+    <div class="event-item">
+      <div class="event-icon">&#128205;</div>
+      <div class="event-text">
+        <div class="event-label">Venue</div>
+        <div class="event-value">Bar Association Hall</div>
+      </div>
+    </div>
+    <div class="event-item">
+      <div class="event-icon">&#127380;</div>
+      <div class="event-text">
+        <div class="event-label">Entry</div>
+        <div class="event-value">Free for Advocates</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="stats-row">
+    <div class="stat">
+      <div class="stat-number">5+</div>
+      <div class="stat-label">User Roles</div>
+    </div>
+    <div class="stat">
+      <div class="stat-number">25+</div>
+      <div class="stat-label">Permissions</div>
+    </div>
+    <div class="stat">
+      <div class="stat-number">20+</div>
+      <div class="stat-label">Limitation Articles</div>
+    </div>
+    <div class="stat">
+      <div class="stat-number">7</div>
+      <div class="stat-label">Notice Templates</div>
+    </div>
+  </div>
+
+  <!-- Features -->
+  <div class="section-label">What You'll Discover</div>
+  <div class="features-grid">
+    <div class="feature-card">
+      <span class="feature-icon">&#129302;</span>
+      <div class="feature-title">AI Legal Research (RAG)</div>
+      <div class="feature-desc">Upload case files, judgments & statutes — ask questions in plain English. The AI reads your documents and delivers answers with exact source references.</div>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon">&#9878;&#65039;</span>
+      <div class="feature-title">eCourts Integration</div>
+      <div class="feature-desc">Live sync with Indian eCourts — lookup by CNR, case number, party or advocate name. Auto-populate hearing dates, judges & case status.</div>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon">&#128221;</span>
+      <div class="feature-title">Legal Notices in Minutes</div>
+      <div class="feature-desc">Ready-made templates for Section 80 CPC, Section 138 NI Act, eviction, demand & more. AI-assisted drafting with built-in approval workflows.</div>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon">&#9200;</span>
+      <div class="feature-title">Limitation Period Tracker</div>
+      <div class="feature-desc">Never miss a deadline. Auto-calculates limitation from 20+ Indian law articles — alerts at critical, warning & safe stages with extension tracking.</div>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon">&#128188;</span>
+      <div class="feature-title">Complete Case Management</div>
+      <div class="feature-desc">Manage clients, cases, court diary, document submissions & calendar events — all in one place with role-based access for your entire team.</div>
+    </div>
+    <div class="feature-card">
+      <span class="feature-icon">&#128176;</span>
+      <div class="feature-title">Billing &amp; GST Invoicing</div>
+      <div class="feature-desc">Track billable hours per lawyer, generate GST-compliant invoices with SAC codes. Automatic time entry → invoice conversion.</div>
+    </div>
+  </div>
+
+  <!-- Highlight box -->
+  <div class="highlight-box">
+    <h3>Built for the Indian Legal Ecosystem</h3>
+    <div class="highlight-items">
+      <div class="highlight-item"><span class="check">&#10003;</span> Indian eCourts API</div>
+      <div class="highlight-item"><span class="check">&#10003;</span> Limitation Act Articles</div>
+      <div class="highlight-item"><span class="check">&#10003;</span> CPC &amp; NI Act Templates</div>
+      <div class="highlight-item"><span class="check">&#10003;</span> GST &amp; SAC Compliance</div>
+      <div class="highlight-item"><span class="check">&#10003;</span> Bar Council Ready</div>
+      <div class="highlight-item"><span class="check">&#10003;</span> Role-Based Security</div>
+    </div>
+  </div>
+
+  <!-- Who should attend -->
+  <div class="audience-section">
+    <h3>Who Should Attend</h3>
+    <div class="audience-tags">
+      <span class="audience-tag">Senior Advocates</span>
+      <span class="audience-tag">Junior Advocates</span>
+      <span class="audience-tag">Law Firm Partners</span>
+      <span class="audience-tag">Legal Clerks</span>
+      <span class="audience-tag">Law Interns</span>
+      <span class="audience-tag">Legal Tech Enthusiasts</span>
+    </div>
+  </div>
+
+  <!-- CTA -->
+  <div class="cta-section">
+    <div class="cta-button">REGISTER NOW — SEATS LIMITED</div>
+    <p class="cta-sub">Live demo &bull; Hands-on session &bull; Q&amp;A with the developers</p>
+    <p class="cta-sub" style="margin-top: 8px;">&#128222; <strong>+91 87148 08189</strong> &nbsp;|&nbsp; <strong>+91 90747 96012</strong><br>
+    &#128231; <strong>varunsatheesh24@gmail.com</strong> &nbsp;|&nbsp; <strong>sreelalvarier727@gmail.com</strong></p>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="footer-brand">Legal-RAG &mdash; Open Source</div>
+    <p class="footer-note">Powered by Next.js &bull; Prisma &bull; ChromaDB &bull; AI (Mistral/DeepSeek)<br>
+    <a href="https://github.com/Sreelal727/legal-rag">github.com/Sreelal727/legal-rag</a></p>
+  </div>
+
+  <div class="bottom-bar"></div>
+</div>
+</body>
+</html>

@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "legal-rag",
+      "runtimeExecutable": "C:/nodejs/node-v22.14.0-win-x64/node.exe",
+      "runtimeArgs": ["node_modules/next/dist/bin/next", "dev"],
+      "port": 3000,
+      "autoPort": false
+    },
+    {
+      "name": "poster-preview",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["serve-poster.js"],
+      "port": 3456
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withAuth } from "@/lib/api-utils";
-import { processFormatSample } from "@/lib/rag/format-pipeline";
+// Dynamic import for format-pipeline to avoid loading chromadb/@xenova/transformers at module level
 import { existsSync, writeFileSync, mkdirSync, unlinkSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
@@ -67,6 +67,7 @@ export async function POST() {
         // Index into ChromaDB
         let chunks = 0;
         try {
+          const { processFormatSample } = await import("@/lib/rag/format-pipeline");
           const indexResult = await processFormatSample(sample.id);
           chunks = indexResult.chunks;
         } catch (indexErr: any) {

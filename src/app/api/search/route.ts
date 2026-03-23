@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/lib/api-utils";
-import { semanticSearch } from "@/lib/rag/pipeline";
 
 export async function POST(request: NextRequest) {
   const { error } = await withAuth("documents:read");
@@ -13,6 +12,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const { semanticSearch } = await import("@/lib/rag/pipeline");
     const results = await semanticSearch(query, caseId, limit);
     return NextResponse.json(results);
   } catch (err: any) {

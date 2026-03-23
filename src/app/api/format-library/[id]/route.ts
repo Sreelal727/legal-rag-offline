@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withAuth } from "@/lib/api-utils";
-import { deleteFormatChunks } from "@/lib/rag/vectorstore";
+// Do NOT import vectorstore at top level — it pulls in chromadb which crashes on Vercel
 import { unlinkSync, existsSync } from "fs";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -51,8 +51,9 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     }
   } catch {}
 
-  // Remove from ChromaDB format index
+  // Remove from ChromaDB format index (dynamic import to avoid crash on Vercel)
   try {
+    const { deleteFormatChunks } = await import("@/lib/rag/vectorstore");
     await deleteFormatChunks(id);
   } catch {
     // ChromaDB might not be running or collection might not exist
