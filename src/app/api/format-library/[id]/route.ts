@@ -44,10 +44,12 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const sample = await prisma.formatSample.findUnique({ where: { id } });
   if (!sample) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  // Delete file from disk
-  if (existsSync(sample.filePath)) {
-    try { unlinkSync(sample.filePath); } catch {}
-  }
+  // Delete file from disk (may not exist on serverless)
+  try {
+    if (sample.filePath && existsSync(sample.filePath)) {
+      unlinkSync(sample.filePath);
+    }
+  } catch {}
 
   // Remove from ChromaDB format index
   try {

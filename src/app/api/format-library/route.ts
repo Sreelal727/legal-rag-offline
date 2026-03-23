@@ -3,10 +3,14 @@ import { prisma } from "@/lib/prisma";
 import { withAuth } from "@/lib/api-utils";
 import { extractStructuredContent } from "@/lib/docx-extract";
 import { processFormatSample } from "@/lib/rag/format-pipeline";
-import { writeFileSync, mkdirSync, existsSync } from "fs";
+import { writeFileSync, mkdirSync, existsSync, unlinkSync } from "fs";
 import { join } from "path";
+import { tmpdir } from "os";
 
-const UPLOAD_DIR = join(process.cwd(), "uploads", "format-samples");
+// Use /tmp on serverless (Vercel), fallback to project dir locally
+const UPLOAD_DIR = process.env.VERCEL
+  ? join(tmpdir(), "format-samples")
+  : join(process.cwd(), "uploads", "format-samples");
 
 export async function GET(request: NextRequest) {
   const { error } = await withAuth("notices:read");
@@ -23,6 +27,21 @@ export async function GET(request: NextRequest) {
   const samples = await prisma.formatSample.findMany({
     where,
     orderBy: { category: "asc" },
+    select: {
+      id: true,
+      name: true,
+      category: true,
+      subcategory: true,
+      description: true,
+      textContent: true,
+      filePath: true,
+      fileName: true,
+      fileSize: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
+      // Exclude fileData (base64) from list responses - it's large
+    },
   });
 
   return NextResponse.json(samples);
@@ -49,7 +68,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Only .doc, .docx, and .pdf files are supported" }, { status: 400 });
   }
 
-  // Save file to disk
+  // Save file to temp disk for extraction
   if (!existsSync(UPLOAD_DIR)) {
     mkdirSync(UPLOAD_DIR, { recursive: true });
   }
@@ -70,6 +89,14 @@ export async function POST(request: NextRequest) {
     textContent = "[Text extraction failed - file stored for reference]";
   }
 
+  // Clean up temp file on serverless (file is ephemeral anyway)
+  if (process.env.VERCEL) {
+    try { unlinkSync(filePath); } catch {}
+  }
+
+  // Store file data as base64 so it survives serverless ephemeral storage
+  const fileDataBase64 = buffer.toString("base64");
+
   const sample = await prisma.formatSample.create({
     data: {
       name,
@@ -80,6 +107,7 @@ export async function POST(request: NextRequest) {
       filePath,
       fileName,
       fileSize: buffer.length,
+      fileData: fileDataBase64,
     },
   });
 

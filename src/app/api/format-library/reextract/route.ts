@@ -3,7 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { withAuth } from "@/lib/api-utils";
 import { extractStructuredContent } from "@/lib/docx-extract";
 import { processFormatSample } from "@/lib/rag/format-pipeline";
-import { existsSync } from "fs";
+import { existsSync, writeFileSync, mkdirSync, unlinkSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
 
 /**
  * POST /api/format-library/reextract
@@ -20,7 +22,7 @@ export async function POST() {
       where: {
         isActive: true,
       },
-      select: { id: true, name: true, fileName: true, filePath: true, textContent: true },
+      select: { id: true, name: true, fileName: true, filePath: true, textContent: true, fileData: true },
     });
 
     const results = [];
@@ -36,14 +38,23 @@ export async function POST() {
         continue;
       }
 
-      // Check if file exists on disk
+      // Restore file from database if not on disk
+      let extractPath = sample.filePath;
+      let tempFile = false;
       if (!existsSync(sample.filePath)) {
-        results.push({ id: sample.id, name: sample.name, status: "failed", reason: "file not found on disk" });
-        continue;
+        if (!sample.fileData) {
+          results.push({ id: sample.id, name: sample.name, status: "failed", reason: "file not found on disk and no stored data" });
+          continue;
+        }
+        const tmpDir = join(tmpdir(), "format-samples");
+        if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });
+        extractPath = join(tmpDir, `reextract-${sample.id}-${sample.fileName}`);
+        writeFileSync(extractPath, Buffer.from(sample.fileData, "base64"));
+        tempFile = true;
       }
 
       try {
-        const extracted = await extractStructuredContent(sample.filePath, sample.fileName);
+        const extracted = await extractStructuredContent(extractPath, sample.fileName);
 
         // Update text content in database
         await prisma.formatSample.update({
@@ -70,6 +81,10 @@ export async function POST() {
         });
       } catch (err: any) {
         results.push({ id: sample.id, name: sample.name, status: "failed", reason: err.message });
+      } finally {
+        if (tempFile) {
+          try { unlinkSync(extractPath); } catch {}
+        }
       }
     }
 
