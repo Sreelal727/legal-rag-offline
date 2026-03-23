@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, MessageSquare, Plus, FileText, Loader2, Bot, User, Download, Trash2 } from "lucide-react";
+import { Send, MessageSquare, Plus, FileText, Loader2, Bot, User, Download, Trash2, Mic, MicOff, Square } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
@@ -45,6 +45,10 @@ export default function ChatPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  const [recording, setRecording] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const fetchSessions = useCallback(async () => {
@@ -148,6 +152,77 @@ export default function ChatPage() {
     }
 
     setSending(false);
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+          ? "audio/webm;codecs=opus"
+          : "audio/webm",
+      });
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        // Stop all tracks to release microphone
+        stream.getTracks().forEach((track) => track.stop());
+
+        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+        if (audioBlob.size < 100) {
+          toast.error("Recording too short. Please try again.");
+          return;
+        }
+
+        setTranscribing(true);
+        try {
+          const formData = new FormData();
+          formData.append("audio", audioBlob, "recording.webm");
+
+          const res = await fetch("/api/chat/transcribe", {
+            method: "POST",
+            body: formData,
+          });
+
+          const data = await res.json();
+
+          if (res.ok && data.text) {
+            setInput((prev) => (prev ? prev + " " + data.text : data.text));
+            toast.success("Voice transcribed successfully");
+          } else {
+            toast.error(data.error || "Transcription failed");
+          }
+        } catch {
+          toast.error("Transcription failed. Check your connection.");
+        } finally {
+          setTranscribing(false);
+        }
+      };
+
+      mediaRecorder.start(250); // Collect data every 250ms
+      setRecording(true);
+      toast.info("Recording... Click stop when done.");
+    } catch (err: any) {
+      if (err.name === "NotAllowedError") {
+        toast.error("Microphone permission denied. Please allow access in your browser settings.");
+      } else {
+        toast.error("Could not access microphone.");
+      }
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      mediaRecorderRef.current.stop();
+      setRecording(false);
+    }
   };
 
   const handleExport = async (content: string, format: "docx" | "pdf", formatSampleId?: string) => {
@@ -397,15 +472,50 @@ export default function ChatPage() {
         </ScrollArea>
 
         <div className="p-3 border-t">
+          {recording && (
+            <div className="mb-2 flex items-center gap-2 text-sm text-red-500 animate-pulse">
+              <span className="h-2 w-2 rounded-full bg-red-500" />
+              Recording... Click stop when done.
+            </div>
+          )}
+          {transcribing && (
+            <div className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Transcribing your voice...
+            </div>
+          )}
           <div className="flex gap-2">
             <Input
-              placeholder="Ask about your legal documents..."
+              placeholder={recording ? "Listening..." : "Ask about your legal documents..."}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-              disabled={sending}
+              disabled={sending || recording}
             />
-            <Button onClick={handleSend} disabled={sending || !input.trim()}>
+            {recording ? (
+              <Button
+                onClick={stopRecording}
+                variant="destructive"
+                className="animate-pulse"
+                title="Stop recording"
+              >
+                <Square className="h-4 w-4" />
+              </Button>
+            ) : (
+              <Button
+                onClick={startRecording}
+                variant="outline"
+                disabled={sending || transcribing}
+                title="Start voice input (Whisper STT)"
+              >
+                {transcribing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Mic className="h-4 w-4" />
+                )}
+              </Button>
+            )}
+            <Button onClick={handleSend} disabled={sending || !input.trim() || recording}>
               {sending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
             </Button>
           </div>
