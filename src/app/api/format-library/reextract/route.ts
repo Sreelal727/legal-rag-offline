@@ -23,7 +23,7 @@ export async function POST() {
       where: {
         isActive: true,
       },
-      select: { id: true, name: true, fileName: true, filePath: true, textContent: true, fileData: true },
+      select: { id: true, name: true, fileName: true, filePath: true, textContent: true },
     });
 
     const results = [];
@@ -39,19 +39,12 @@ export async function POST() {
         continue;
       }
 
-      // Restore file from database if not on disk
+      // Check if file exists on disk
       let extractPath = sample.filePath;
       let tempFile = false;
       if (!existsSync(sample.filePath)) {
-        if (!sample.fileData) {
-          results.push({ id: sample.id, name: sample.name, status: "failed", reason: "file not found on disk and no stored data" });
-          continue;
-        }
-        const tmpDir = join(tmpdir(), "format-samples");
-        if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });
-        extractPath = join(tmpDir, `reextract-${sample.id}-${sample.fileName}`);
-        writeFileSync(extractPath, Buffer.from(sample.fileData, "base64"));
-        tempFile = true;
+        results.push({ id: sample.id, name: sample.name, status: "failed", reason: "file not found on disk" });
+        continue;
       }
 
       try {
