@@ -94,13 +94,20 @@ export async function extractTextFromDoc(filePath: string): Promise<string> {
 
 /**
  * Extract text from PDF using pdf-parse
+ * Note: pdf-parse tries to load a test PDF on require(), so we handle this carefully
  */
 export async function extractTextFromPdf(filePath: string): Promise<string> {
-  const pdfParse = await import("pdf-parse");
-  const pdf = (pdfParse as any).default || pdfParse;
   const buffer = readFileSync(filePath);
-  const data = await pdf(buffer);
-  return data.text;
+  try {
+    const pdfParse = await import("pdf-parse");
+    const pdf = (pdfParse as any).default || pdfParse;
+    const data = await pdf(buffer);
+    return data.text;
+  } catch (e: any) {
+    console.error("pdf-parse failed, trying fallback:", e?.message);
+    // Fallback: return a placeholder if pdf-parse fails on serverless
+    throw new Error("PDF extraction failed: " + (e?.message || "unknown error"));
+  }
 }
 
 /**

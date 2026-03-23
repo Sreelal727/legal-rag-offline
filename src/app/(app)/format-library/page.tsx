@@ -123,11 +123,22 @@ export default function FormatLibraryPage() {
         resetUploadForm();
         fetchSamples();
       } else {
-        const err = await res.json();
-        toast.error(err.error || "Upload failed");
+        // Safely parse error - Vercel may return HTML error pages
+        let errorMsg = `Upload failed (${res.status})`;
+        try {
+          const text = await res.text();
+          const err = JSON.parse(text);
+          errorMsg = err.error || errorMsg;
+        } catch {
+          // Response was not JSON (e.g., Vercel HTML error page)
+          if (res.status === 413) errorMsg = "File too large. Max ~4.5MB allowed.";
+          else if (res.status === 504) errorMsg = "Upload timed out. Try a smaller file.";
+        }
+        toast.error(errorMsg);
       }
-    } catch {
-      toast.error("Upload failed");
+    } catch (e: any) {
+      console.error("Upload error:", e);
+      toast.error("Upload failed — network error");
     }
     setUploading(false);
   };

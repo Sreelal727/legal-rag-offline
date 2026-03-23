@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withAuth } from "@/lib/api-utils";
-import { extractStructuredContent } from "@/lib/docx-extract";
 import { processFormatSample } from "@/lib/rag/format-pipeline";
 import { writeFileSync, mkdirSync, existsSync, unlinkSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
+
+// Increase timeout for file processing on Vercel (default 10s is too short)
+export const maxDuration = 60;
 
 // Use /tmp on serverless (Vercel), fallback to project dir locally
 const UPLOAD_DIR = process.env.VERCEL
@@ -48,78 +50,113 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const { error } = await withAuth("settings:write");
-  if (error) return error;
-
-  const formData = await request.formData();
-  const file = formData.get("file") as File;
-  const name = formData.get("name") as string;
-  const category = formData.get("category") as string;
-  const subcategory = formData.get("subcategory") as string | null;
-  const description = formData.get("description") as string | null;
-
-  if (!file || !name || !category) {
-    return NextResponse.json({ error: "File, name, and category are required" }, { status: 400 });
-  }
-
-  const fileName = file.name;
-  const ext = fileName.split(".").pop()?.toLowerCase();
-  if (!ext || !["doc", "docx", "pdf"].includes(ext)) {
-    return NextResponse.json({ error: "Only .doc, .docx, and .pdf files are supported" }, { status: 400 });
-  }
-
-  // Save file to temp disk for extraction
-  if (!existsSync(UPLOAD_DIR)) {
-    mkdirSync(UPLOAD_DIR, { recursive: true });
-  }
-
-  const uniqueName = `${Date.now()}-${fileName}`;
-  const filePath = join(UPLOAD_DIR, uniqueName);
-  const buffer = Buffer.from(await file.arrayBuffer());
-  writeFileSync(filePath, buffer);
-
-  // Extract structured content (markdown for DOCX, text for PDF/DOC)
-  let textContent = "";
-  let contentFormat: "markdown" | "text" = "text";
   try {
-    const extracted = await extractStructuredContent(filePath, fileName);
-    textContent = extracted.text;
-    contentFormat = extracted.format;
-  } catch {
-    textContent = "[Text extraction failed - file stored for reference]";
-  }
+    const { error } = await withAuth("settings:write");
+    if (error) return error;
 
-  // Clean up temp file on serverless (file is ephemeral anyway)
-  if (process.env.VERCEL) {
-    try { unlinkSync(filePath); } catch {}
-  }
+    let formData: FormData;
+    try {
+      formData = await request.formData();
+    } catch (e: any) {
+      console.error("FormData parse error:", e);
+      return NextResponse.json(
+        { error: "Failed to parse upload. File may be too large (max ~4.5MB)." },
+        { status: 413 }
+      );
+    }
 
-  // Store file data as base64 so it survives serverless ephemeral storage
-  const fileDataBase64 = buffer.toString("base64");
+    const file = formData.get("file") as File;
+    const name = formData.get("name") as string;
+    const category = formData.get("category") as string;
+    const subcategory = formData.get("subcategory") as string | null;
+    const description = formData.get("description") as string | null;
 
-  const sample = await prisma.formatSample.create({
-    data: {
-      name,
-      category,
-      subcategory: subcategory || null,
-      description: description || null,
-      textContent,
-      filePath,
-      fileName,
-      fileSize: buffer.length,
-      fileData: fileDataBase64,
-    },
-  });
+    if (!file || !name || !category) {
+      return NextResponse.json({ error: "File, name, and category are required" }, { status: 400 });
+    }
 
-  // Index format sample into ChromaDB for semantic search (non-blocking)
-  if (textContent && !textContent.startsWith("[Text extraction failed")) {
-    processFormatSample(sample.id).catch((err) => {
-      console.error(`Failed to index format sample ${sample.id}:`, err);
+    const fileName = file.name;
+    const ext = fileName.split(".").pop()?.toLowerCase();
+    if (!ext || !["doc", "docx", "pdf"].includes(ext)) {
+      return NextResponse.json({ error: "Only .doc, .docx, and .pdf files are supported" }, { status: 400 });
+    }
+
+    // Read file into buffer
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(await file.arrayBuffer());
+    } catch (e: any) {
+      console.error("File read error:", e);
+      return NextResponse.json({ error: "Failed to read uploaded file" }, { status: 500 });
+    }
+
+    // Save file to temp disk for extraction
+    let filePath = "";
+    try {
+      if (!existsSync(UPLOAD_DIR)) {
+        mkdirSync(UPLOAD_DIR, { recursive: true });
+      }
+      const uniqueName = `${Date.now()}-${fileName}`;
+      filePath = join(UPLOAD_DIR, uniqueName);
+      writeFileSync(filePath, buffer);
+    } catch (e: any) {
+      console.error("File write error:", e);
+      // Even if temp write fails, we can still store in DB without extraction
+      filePath = `virtual://${Date.now()}-${fileName}`;
+    }
+
+    // Extract structured content (markdown for DOCX, text for PDF/DOC)
+    // Lazy-import to avoid module-level crashes on Vercel
+    let textContent = "";
+    let contentFormat: "markdown" | "text" = "text";
+    try {
+      const { extractStructuredContent } = await import("@/lib/docx-extract");
+      const extracted = await extractStructuredContent(filePath, fileName);
+      textContent = extracted.text;
+      contentFormat = extracted.format;
+    } catch (e: any) {
+      console.error("Extraction error:", e?.message || e);
+      textContent = "[Text extraction failed - file stored for reference]";
+    }
+
+    // Clean up temp file on serverless (file is ephemeral anyway)
+    if (process.env.VERCEL && filePath && !filePath.startsWith("virtual://")) {
+      try { unlinkSync(filePath); } catch {}
+    }
+
+    // Store file data as base64 so it survives serverless ephemeral storage
+    const fileDataBase64 = buffer.toString("base64");
+
+    const sample = await prisma.formatSample.create({
+      data: {
+        name,
+        category,
+        subcategory: subcategory || null,
+        description: description || null,
+        textContent,
+        filePath,
+        fileName,
+        fileSize: buffer.length,
+        fileData: fileDataBase64,
+      },
     });
-  }
 
-  return NextResponse.json(
-    { ...sample, contentFormat },
-    { status: 201 }
-  );
+    // Index format sample into ChromaDB for semantic search (non-blocking)
+    if (textContent && !textContent.startsWith("[Text extraction failed")) {
+      processFormatSample(sample.id).catch((err) => {
+        console.error(`Failed to index format sample ${sample.id}:`, err);
+      });
+    }
+
+    return NextResponse.json(
+      { ...sample, fileData: undefined, contentFormat },
+      { status: 201 }
+    );
+  } catch (e: any) {
+    console.error("Upload handler error:", e);
+    return NextResponse.json(
+      { error: e?.message || "Internal server error during upload" },
+      { status: 500 }
+    );
+  }
 }

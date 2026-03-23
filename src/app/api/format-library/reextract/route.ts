@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { withAuth } from "@/lib/api-utils";
-import { extractStructuredContent } from "@/lib/docx-extract";
 import { processFormatSample } from "@/lib/rag/format-pipeline";
 import { existsSync, writeFileSync, mkdirSync, unlinkSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
+
+export const maxDuration = 60;
 
 /**
  * POST /api/format-library/reextract
@@ -54,6 +55,7 @@ export async function POST() {
       }
 
       try {
+        const { extractStructuredContent } = await import("@/lib/docx-extract");
         const extracted = await extractStructuredContent(extractPath, sample.fileName);
 
         // Update text content in database
