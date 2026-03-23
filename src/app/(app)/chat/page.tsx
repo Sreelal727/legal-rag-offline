@@ -218,7 +218,7 @@ export default function ChatPage() {
   return (
     <div className="flex h-[calc(100vh-5rem)] gap-4">
       {/* Sessions sidebar */}
-      <div className="w-64 border rounded-lg flex flex-col">
+      <div className="w-64 flex-shrink-0 border rounded-lg flex flex-col">
         <div className="p-3 border-b">
           <Button onClick={startNewChat} className="w-full" size="sm">
             <Plus className="mr-2 h-4 w-4" /> New Chat
@@ -252,7 +252,7 @@ export default function ChatPage() {
       </div>
 
       {/* Chat area */}
-      <div className="flex-1 border rounded-lg flex flex-col">
+      <div className="flex-1 min-w-0 border rounded-lg flex flex-col">
         <div className="p-3 border-b flex items-center gap-2">
           <MessageSquare className="h-5 w-5" />
           <h2 className="font-semibold">AI Legal Assistant</h2>
