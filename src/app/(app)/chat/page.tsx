@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Send, MessageSquare, Plus, FileText, Loader2, Bot, User, Download } from "lucide-react";
+import { Send, MessageSquare, Plus, FileText, Loader2, Bot, User, Download, Trash2 } from "lucide-react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 import ReactMarkdown from "react-markdown";
@@ -67,6 +67,26 @@ export default function ChatPage() {
   const startNewChat = () => {
     setCurrentSession(null);
     setMessages([]);
+  };
+
+  const deleteSession = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Delete this chat session?")) return;
+    try {
+      const res = await fetch(`/api/chat/sessions/${id}`, { method: "DELETE" });
+      if (res.ok) {
+        setSessions((prev) => prev.filter((s) => s.id !== id));
+        if (currentSession === id) {
+          setCurrentSession(null);
+          setMessages([]);
+        }
+        toast.success("Chat deleted");
+      } else {
+        toast.error("Failed to delete chat");
+      }
+    } catch {
+      toast.error("Failed to delete chat");
+    }
   };
 
   const handleSend = async () => {
@@ -207,18 +227,25 @@ export default function ChatPage() {
         <ScrollArea className="flex-1">
           <div className="p-2 space-y-1">
             {sessions.map((s) => (
-              <button
+              <div
                 key={s.id}
-                onClick={() => loadSession(s.id)}
-                className={`w-full text-left p-2 rounded text-sm hover:bg-muted transition-colors ${
+                className={`group relative w-full text-left p-2 rounded text-sm hover:bg-muted transition-colors cursor-pointer ${
                   currentSession === s.id ? "bg-muted" : ""
                 }`}
+                onClick={() => loadSession(s.id)}
               >
-                <p className="font-medium truncate">{s.title}</p>
+                <p className="font-medium truncate pr-6">{s.title}</p>
                 <p className="text-xs text-muted-foreground">
                   {s._count.messages} messages
                 </p>
-              </button>
+                <button
+                  onClick={(e) => deleteSession(s.id, e)}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive transition-all"
+                  title="Delete chat"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </div>
             ))}
           </div>
         </ScrollArea>
