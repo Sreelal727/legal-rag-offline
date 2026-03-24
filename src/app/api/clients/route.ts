@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth } from "@/lib/api-utils";
+import { withAuth, getOrgId } from "@/lib/api-utils";
 
 export async function GET(request: NextRequest) {
-  const { error } = await withAuth("clients:read");
+  const { error, session } = await withAuth("clients:read");
   if (error) return error;
 
+  const organizationId = getOrgId(session!);
   const searchParams = request.nextUrl.searchParams;
   const search = searchParams.get("search") || "";
   const page = parseInt(searchParams.get("page") || "1");
@@ -13,13 +14,14 @@ export async function GET(request: NextRequest) {
 
   const where = search
     ? {
+        organizationId,
         OR: [
           { name: { contains: search } },
           { email: { contains: search } },
           { phone: { contains: search } },
         ],
       }
-    : {};
+    : { organizationId };
 
   const [clients, total] = await Promise.all([
     prisma.client.findMany({
@@ -41,6 +43,7 @@ export async function POST(request: NextRequest) {
   const { error, session } = await withAuth("clients:write");
   if (error) return error;
 
+  const organizationId = getOrgId(session!);
   const body = await request.json();
   const { name, email, phone, address, clientType, panNumber, aadharNumber, gstNumber, notes } = body;
 
@@ -49,7 +52,7 @@ export async function POST(request: NextRequest) {
   }
 
   const client = await prisma.client.create({
-    data: { name, email, phone, address, clientType, panNumber, aadharNumber, gstNumber, notes },
+    data: { name, email, phone, address, clientType, panNumber, aadharNumber, gstNumber, notes, organizationId },
   });
 
   await prisma.auditLog.create({
@@ -59,6 +62,7 @@ export async function POST(request: NextRequest) {
       entity: "Client",
       entityId: client.id,
       details: `Created client: ${name}`,
+      organizationId,
     },
   });
 

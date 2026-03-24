@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { withAuth } from "@/lib/api-utils";
+import { withAuth, getOrgId } from "@/lib/api-utils";
 import { prisma } from "@/lib/prisma";
 import { lookupByCNR } from "@/lib/ecourts/service";
 import { format } from "date-fns";
@@ -13,9 +13,10 @@ function fmt(date: Date | string | null | undefined): string {
 }
 
 export async function GET(req: NextRequest) {
-  const { error } = await withAuth("clients:read");
+  const { error, session } = await withAuth("clients:read");
   if (error) return error;
 
+  const orgId = getOrgId(session!);
   const { searchParams } = req.nextUrl;
   const clientId = searchParams.get("clientId");
   const category = searchParams.get("category") as Category | null;
@@ -25,13 +26,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "clientId required" }, { status: 400 });
   }
 
-  const client = await prisma.client.findUnique({ where: { id: clientId } });
+  const client = await prisma.client.findFirst({ where: { id: clientId, organizationId: orgId } });
   if (!client) {
     return NextResponse.json({ error: "Client not found" }, { status: 404 });
   }
 
-  const firm = await prisma.firmSettings.findFirst();
-  const firmName = firm?.firmName || "Legal Practice";
+  const org = await prisma.organization.findUnique({ where: { id: orgId } });
+  const firmName = org?.name || "Legal Practice";
 
   if (!category || category === "OTHER") {
     return NextResponse.json({ client: { id: client.id, name: client.name, phone: client.phone }, items: [], message: "" });
@@ -45,12 +46,12 @@ export async function GET(req: NextRequest) {
   if (category === "CASE_UPDATE") {
     if (!itemId) {
       const cases = await prisma.case.findMany({
-        where: { caseClients: { some: { clientId } } },
+        where: { organizationId: orgId, caseClients: { some: { clientId } } },
         select: { id: true, caseNumber: true, title: true },
       });
       return NextResponse.json({ client: { id: client.id, name: client.name, phone: client.phone }, items: cases, message: "" });
     }
-    const c = await prisma.case.findUnique({ where: { id: itemId } });
+    const c = await prisma.case.findFirst({ where: { id: itemId, organizationId: orgId } });
     if (!c) return NextResponse.json({ error: "Case not found" }, { status: 404 });
     const message = `Dear ${client.name},
 
@@ -70,12 +71,12 @@ ${firmName}`;
   if (category === "DOCUMENT_SUBMISSION") {
     if (!itemId) {
       const cases = await prisma.case.findMany({
-        where: { caseClients: { some: { clientId } } },
+        where: { organizationId: orgId, caseClients: { some: { clientId } } },
         select: { id: true, caseNumber: true, title: true },
       });
       return NextResponse.json({ client: { id: client.id, name: client.name, phone: client.phone }, items: cases, message: "" });
     }
-    const c = await prisma.case.findUnique({ where: { id: itemId } });
+    const c = await prisma.case.findFirst({ where: { id: itemId, organizationId: orgId } });
     if (!c) return NextResponse.json({ error: "Case not found" }, { status: 404 });
     const docs = await prisma.documentSubmission.findMany({
       where: { caseId: itemId, status: { not: "COMPLETED" } },
@@ -108,12 +109,12 @@ ${firmName}`;
   if (category === "ECOURTS_STATUS") {
     if (!itemId) {
       const cases = await prisma.case.findMany({
-        where: { caseClients: { some: { clientId } }, cnrNumber: { not: null } },
+        where: { organizationId: orgId, caseClients: { some: { clientId } }, cnrNumber: { not: null } },
         select: { id: true, caseNumber: true, title: true, cnrNumber: true },
       });
       return NextResponse.json({ client: { id: client.id, name: client.name, phone: client.phone }, items: cases, message: "" });
     }
-    const c = await prisma.case.findUnique({ where: { id: itemId } });
+    const c = await prisma.case.findFirst({ where: { id: itemId, organizationId: orgId } });
     if (!c) return NextResponse.json({ error: "Case not found" }, { status: 404 });
 
     let status = c.ecourtStatus || c.status;
@@ -152,7 +153,7 @@ ${firmName}`;
   if (category === "BILLING") {
     if (!itemId) {
       const invoices = await prisma.invoice.findMany({
-        where: { clientId },
+        where: { clientId, organizationId: orgId },
         select: { id: true, invoiceNumber: true, totalAmount: true, status: true },
         orderBy: { createdAt: "desc" },
       });
@@ -163,7 +164,7 @@ ${firmName}`;
       }));
       return NextResponse.json({ client: { id: client.id, name: client.name, phone: client.phone }, items, message: "" });
     }
-    const inv = await prisma.invoice.findUnique({ where: { id: itemId }, include: { invoiceItems: true } });
+    const inv = await prisma.invoice.findFirst({ where: { id: itemId, organizationId: orgId }, include: { invoiceItems: true } });
     if (!inv) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
     const message = `Dear ${client.name},
 

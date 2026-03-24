@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth } from "@/lib/api-utils";
+import { withAuth, getOrgId } from "@/lib/api-utils";
 
 export async function GET(request: NextRequest) {
-  const { error } = await withAuth("cases:read");
+  const { error, session } = await withAuth("cases:read");
   if (error) return error;
 
   const searchParams = request.nextUrl.searchParams;
   const caseId = searchParams.get("caseId") || undefined;
 
-  const where: any = {};
+  const where: any = { organizationId: getOrgId(session!) };
   if (caseId) where.caseId = caseId;
 
   const submissions = await prisma.documentSubmission.findMany({
@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
   const { error, session } = await withAuth("cases:write");
   if (error) return error;
 
+  const orgId = getOrgId(session!);
   const body = await request.json();
   const { title, description, documentType, caseId, clientId, priority, dueDate, assignedTo, courtName } = body;
 
@@ -39,6 +40,7 @@ export async function POST(request: NextRequest) {
 
   const submission = await prisma.documentSubmission.create({
     data: {
+      organizationId: orgId,
       title,
       description: description || null,
       documentType: documentType || "PLEADING",
@@ -63,15 +65,19 @@ export async function POST(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const { error } = await withAuth("cases:write");
+  const { error, session } = await withAuth("cases:write");
   if (error) return error;
 
+  const orgId = getOrgId(session!);
   const body = await request.json();
   const { id, status, sortOrder, ...rest } = body;
 
   if (!id) {
     return NextResponse.json({ error: "ID is required" }, { status: 400 });
   }
+
+  const existing = await prisma.documentSubmission.findFirst({ where: { id, organizationId: orgId } });
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const data: any = {};
   if (status !== undefined) data.status = status;
@@ -98,14 +104,18 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const { error } = await withAuth("cases:write");
+  const { error, session } = await withAuth("cases:write");
   if (error) return error;
 
+  const orgId = getOrgId(session!);
   const { id } = await request.json();
 
   if (!id) {
     return NextResponse.json({ error: "ID is required" }, { status: 400 });
   }
+
+  const existing = await prisma.documentSubmission.findFirst({ where: { id, organizationId: orgId } });
+  if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   await prisma.documentSubmission.delete({ where: { id } });
   return NextResponse.json({ success: true });

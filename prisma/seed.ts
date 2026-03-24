@@ -19,6 +19,26 @@ async function main() {
   const prisma = new PrismaClient({ adapter } as any);
   const hashedPassword = await bcrypt.hash("admin123", 12);
 
+  // Create default organization
+  const org = await prisma.organization.upsert({
+    where: { id: "default-org" },
+    update: {},
+    create: {
+      id: "default-org",
+      name: "Kumar & Associates",
+      slug: "kumar-associates",
+      address: "123, Law Chambers, High Court Road, Mumbai - 400001",
+      phone: "+91-22-23456789",
+      email: "office@kumarassociates.com",
+      gstin: "27AABCK1234A1Z5",
+      plan: "PROFESSIONAL",
+      maxUsers: 25,
+      maxCases: 500,
+      maxDocuments: 5000,
+      maxAiQueries: 1000,
+    },
+  });
+
   // Create admin user
   const admin = await prisma.user.upsert({
     where: { email: "admin@legalrag.com" },
@@ -29,6 +49,7 @@ async function main() {
       name: "System Admin",
       role: "ADMIN",
       phone: "+91-9999999999",
+      organizationId: org.id,
     },
   });
 
@@ -43,6 +64,7 @@ async function main() {
       role: "SENIOR_ADVOCATE",
       phone: "+91-9876543210",
       barCouncilNumber: "MAH/1234/2005",
+      organizationId: org.id,
     },
   });
 
@@ -57,6 +79,7 @@ async function main() {
       role: "JUNIOR_ADVOCATE",
       phone: "+91-9876543211",
       barCouncilNumber: "DEL/5678/2018",
+      organizationId: org.id,
     },
   });
 
@@ -70,6 +93,7 @@ async function main() {
       name: "Ramesh Patel",
       role: "CLERK",
       phone: "+91-9876543212",
+      organizationId: org.id,
     },
   });
 
@@ -83,20 +107,7 @@ async function main() {
       name: "Ananya Singh",
       role: "INTERN",
       phone: "+91-9876543213",
-    },
-  });
-
-  // Firm settings
-  await prisma.firmSettings.upsert({
-    where: { id: "default" },
-    update: {},
-    create: {
-      id: "default",
-      firmName: "Kumar & Associates",
-      address: "123, Law Chambers, High Court Road, Mumbai - 400001",
-      phone: "+91-22-23456789",
-      email: "office@kumarassociates.com",
-      gstin: "27AABCK1234A1Z5",
+      organizationId: org.id,
     },
   });
 
@@ -325,6 +336,7 @@ Advocate
       update: {},
       create: {
         id: template.name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase(),
+        organizationId: org.id,
         ...template,
       },
     });
@@ -336,6 +348,7 @@ Advocate
     update: {},
     create: {
       id: "client-1",
+      organizationId: org.id,
       name: "Mahesh Industries Pvt. Ltd.",
       email: "mahesh@industries.com",
       phone: "+91-9812345678",
@@ -351,6 +364,7 @@ Advocate
     update: {},
     create: {
       id: "client-2",
+      organizationId: org.id,
       name: "Smt. Kavita Deshmukh",
       email: "kavita.d@gmail.com",
       phone: "+91-9823456789",
@@ -366,6 +380,7 @@ Advocate
     where: { caseNumber: "CS/123/2024" },
     update: {},
     create: {
+      organizationId: org.id,
       caseNumber: "CS/123/2024",
       title: "Mahesh Industries vs. ABC Traders - Recovery Suit",
       description: "Recovery suit for unpaid invoices worth Rs. 25,00,000",
@@ -405,6 +420,7 @@ Advocate
   // Sample diary entry
   await prisma.diaryEntry.create({
     data: {
+      organizationId: org.id,
       caseId: case1.id,
       date: new Date("2026-03-20"),
       courtName: "City Civil Court, Mumbai",

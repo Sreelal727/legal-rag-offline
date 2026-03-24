@@ -1,18 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth } from "@/lib/api-utils";
+import { withAuth, getOrgId } from "@/lib/api-utils";
 import { writeFile, mkdir } from "fs/promises";
 import path from "path";
 
 export async function GET(request: NextRequest) {
-  const { error } = await withAuth("documents:read");
+  const { error, session } = await withAuth("documents:read");
   if (error) return error;
 
   const searchParams = request.nextUrl.searchParams;
   const caseId = searchParams.get("caseId");
   const search = searchParams.get("search") || "";
 
-  const where: any = {};
+  const where: any = {
+    organizationId: getOrgId(session!),
+  };
   if (caseId) where.caseId = caseId;
   if (search) {
     where.OR = [
@@ -64,6 +66,7 @@ export async function POST(request: NextRequest) {
       fileSize: file.size,
       uploadedBy: session!.user.id,
       caseId: caseId || null,
+      organizationId: getOrgId(session!),
     },
   });
 
@@ -74,6 +77,7 @@ export async function POST(request: NextRequest) {
       entity: "Document",
       entityId: document.id,
       details: `Uploaded: ${file.name}`,
+      organizationId: getOrgId(session!),
     },
   });
 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth } from "@/lib/api-utils";
+import { withAuth, getOrgId } from "@/lib/api-utils";
 import { searchByAdvocateName, lookupByCNR } from "@/lib/ecourts/service";
 import type { CourtKey } from "@/lib/ecourts/config";
 
@@ -18,6 +18,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const orgId = getOrgId(session!);
   const courtKey = (court || "PALAKKAD_DISTRICT") as CourtKey;
 
   try {
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
         const cnrUpper = cnr.toUpperCase();
 
         // Skip if already exists
-        const existing = await prisma.case.findUnique({ where: { cnrNumber: cnrUpper } });
+        const existing = await prisma.case.findFirst({ where: { cnrNumber: cnrUpper, organizationId: orgId } });
         if (existing) {
           skipped++;
           continue;
@@ -78,6 +79,7 @@ export async function POST(request: NextRequest) {
 
           const newCase = await prisma.case.create({
             data: {
+              organizationId: orgId,
               caseNumber: ecourtData.caseNumber || cnrUpper,
               cnrNumber: cnrUpper,
               title,
@@ -114,6 +116,7 @@ export async function POST(request: NextRequest) {
           if (nextHearingDate && nextHearingDate > new Date()) {
             await prisma.diaryEntry.create({
               data: {
+                organizationId: orgId,
                 caseId: newCase.id,
                 date: nextHearingDate,
                 courtName: ecourtData.courtName || "",
@@ -127,11 +130,11 @@ export async function POST(request: NextRequest) {
           // Find and link client (petitioner)
           if (ecourtData.petitioner) {
             let client = await prisma.client.findFirst({
-              where: { name: { contains: ecourtData.petitioner.split(" ")[0] } },
+              where: { organizationId: orgId, name: { contains: ecourtData.petitioner.split(" ")[0] } },
             });
             if (!client) {
               client = await prisma.client.create({
-                data: { name: ecourtData.petitioner, clientType: "INDIVIDUAL" },
+                data: { organizationId: orgId, name: ecourtData.petitioner, clientType: "INDIVIDUAL" },
               });
             }
             await prisma.caseClient.create({
@@ -156,6 +159,7 @@ export async function POST(request: NextRequest) {
 
       await prisma.auditLog.create({
         data: {
+          organizationId: orgId,
           userId: session!.user.id,
           action: "DCMS_BULK_IMPORT",
           entity: "Case",
@@ -176,6 +180,7 @@ export async function POST(request: NextRequest) {
     // Preview mode — return search results with import status
     const existingCnrs = await prisma.case.findMany({
       where: {
+        organizationId: orgId,
         cnrNumber: { in: results.filter((r) => r.cnrNumber).map((r) => r.cnrNumber.toUpperCase()) },
       },
       select: { cnrNumber: true },

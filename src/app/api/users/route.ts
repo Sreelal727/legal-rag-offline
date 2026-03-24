@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth } from "@/lib/api-utils";
+import { withAuth, getOrgId } from "@/lib/api-utils";
 import bcrypt from "bcryptjs";
 
 export async function GET() {
-  const { error } = await withAuth("users:read");
+  const { error, session } = await withAuth("users:read");
   if (error) return error;
 
   const users = await prisma.user.findMany({
+    where: { organizationId: getOrgId(session!) },
     select: {
       id: true,
       email: true,
@@ -28,6 +29,7 @@ export async function POST(request: NextRequest) {
   const { error, session } = await withAuth("users:write");
   if (error) return error;
 
+  const orgId = getOrgId(session!);
   const body = await request.json();
   const { email, password, name, role, phone, barCouncilNumber } = body;
 
@@ -40,15 +42,33 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Email already exists" }, { status: 400 });
   }
 
+  // Check org user limit
+  const org = await prisma.organization.findUnique({ where: { id: orgId } });
+  if (org) {
+    const userCount = await prisma.user.count({ where: { organizationId: orgId } });
+    if (userCount >= org.maxUsers) {
+      return NextResponse.json({ error: `User limit reached (${org.maxUsers}). Upgrade your plan.` }, { status: 403 });
+    }
+  }
+
   const hashedPassword = await bcrypt.hash(password, 12);
 
   const user = await prisma.user.create({
-    data: { email, password: hashedPassword, name, role: role || "JUNIOR_ADVOCATE", phone, barCouncilNumber },
+    data: {
+      organizationId: orgId,
+      email,
+      password: hashedPassword,
+      name,
+      role: role || "JUNIOR_ADVOCATE",
+      phone,
+      barCouncilNumber,
+    },
     select: { id: true, email: true, name: true, role: true },
   });
 
   await prisma.auditLog.create({
     data: {
+      organizationId: orgId,
       userId: session!.user.id,
       action: "CREATE",
       entity: "User",

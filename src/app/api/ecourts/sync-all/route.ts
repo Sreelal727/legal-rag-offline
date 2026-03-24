@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth } from "@/lib/api-utils";
+import { withAuth, getOrgId } from "@/lib/api-utils";
 import { lookupByCNR } from "@/lib/ecourts/service";
 
 function parseDateDDMMYYYY(dateStr: string): Date | null {
@@ -15,8 +15,10 @@ export async function POST(request: NextRequest) {
   const { error, session } = await withAuth("cases:write");
   if (error) return error;
 
+  const orgId = getOrgId(session!);
   const cases = await prisma.case.findMany({
     where: {
+      organizationId: orgId,
       cnrNumber: { not: null },
       status: { not: "CLOSED" },
     },
@@ -70,6 +72,7 @@ export async function POST(request: NextRequest) {
         if (!existingDiary) {
           await prisma.diaryEntry.create({
             data: {
+              organizationId: orgId,
               caseId: localCase.id,
               date: nextHearingDate,
               courtName: ecourtData.courtName || localCase.courtName,
@@ -92,6 +95,7 @@ export async function POST(request: NextRequest) {
         if (!existingSchedule) {
           await prisma.scheduleEvent.create({
             data: {
+              organizationId: orgId,
               title: `Hearing: ${localCase.caseNumber}`,
               description: `${localCase.title}\nCourt: ${ecourtData.courtName || localCase.courtName}\nJudge: ${ecourtData.judge || "N/A"}`,
               date: nextHearingDate,
@@ -148,6 +152,7 @@ export async function POST(request: NextRequest) {
 
   await prisma.auditLog.create({
     data: {
+      organizationId: orgId,
       userId: session!.user.id,
       action: "ECOURTS_BULK_SYNC",
       entity: "Case",

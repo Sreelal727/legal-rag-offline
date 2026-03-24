@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth } from "@/lib/api-utils";
+import { withAuth, getOrgId } from "@/lib/api-utils";
 // Dynamic import for format-pipeline to avoid loading chromadb/@xenova/transformers at module level
 import { existsSync, writeFileSync, mkdirSync, unlinkSync } from "fs";
 import { join } from "path";
@@ -14,7 +14,7 @@ export const maxDuration = 60;
  * Then re-indexes them into ChromaDB.
  */
 export async function POST() {
-  const { error } = await withAuth("settings:write");
+  const { error, session } = await withAuth("settings:write");
   if (error) return error;
 
   try {
@@ -22,6 +22,7 @@ export async function POST() {
     const samples = await prisma.formatSample.findMany({
       where: {
         isActive: true,
+        organizationId: getOrgId(session!),
       },
       select: { id: true, name: true, fileName: true, filePath: true, textContent: true },
     });

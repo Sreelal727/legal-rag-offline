@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth } from "@/lib/api-utils";
+import { withAuth, getOrgId } from "@/lib/api-utils";
 import { lookupByCNR } from "@/lib/ecourts/service";
 
 // Import a new case from eCourts by CNR number
@@ -14,8 +14,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "CNR number is required" }, { status: 400 });
   }
 
+  const orgId = getOrgId(session!);
+
   // Check if case already exists
-  const existing = await prisma.case.findUnique({ where: { cnrNumber: cnrNumber.toUpperCase() } });
+  const existing = await prisma.case.findFirst({ where: { cnrNumber: cnrNumber.toUpperCase(), organizationId: orgId } });
   if (existing) {
     return NextResponse.json({ error: "Case with this CNR already exists", caseId: existing.id }, { status: 409 });
   }
@@ -49,6 +51,7 @@ export async function POST(request: NextRequest) {
   const title = `${ecourtData.petitioner || "Unknown"} vs ${ecourtData.respondent || "Unknown"}`;
   const newCase = await prisma.case.create({
     data: {
+      organizationId: orgId,
       caseNumber: ecourtData.caseNumber || cnrNumber,
       cnrNumber: cnrNumber.toUpperCase(),
       title,
@@ -83,6 +86,7 @@ export async function POST(request: NextRequest) {
 
   await prisma.auditLog.create({
     data: {
+      organizationId: orgId,
       userId: session!.user.id,
       action: "ECOURTS_IMPORT",
       entity: "Case",

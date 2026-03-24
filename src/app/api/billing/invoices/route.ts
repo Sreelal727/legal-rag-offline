@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth } from "@/lib/api-utils";
+import { withAuth, getOrgId } from "@/lib/api-utils";
 
 export async function GET(request: NextRequest) {
-  const { error } = await withAuth("cases:read");
+  const { error, session } = await withAuth("cases:read");
   if (error) return error;
 
   const searchParams = request.nextUrl.searchParams;
   const status = searchParams.get("status");
   const clientId = searchParams.get("clientId");
 
-  const where: any = {};
+  const where: any = { organizationId: getOrgId(session!) };
   if (status) where.status = status;
   if (clientId) where.clientId = clientId;
 
@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
   const { error, session } = await withAuth("cases:write");
   if (error) return error;
 
+  const orgId = getOrgId(session!);
   const body = await request.json();
   const { clientId, caseId, items, timeEntryIds, gstRate, dueDate, notes } = body;
 
@@ -38,11 +39,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Client and at least one item or time entry required" }, { status: 400 });
   }
 
-  // Generate invoice number
-  const count = await prisma.invoice.count();
+  const count = await prisma.invoice.count({ where: { organizationId: orgId } });
   const invoiceNumber = `INV-${new Date().getFullYear()}-${String(count + 1).padStart(4, "0")}`;
 
-  // Calculate from items
   let subtotal = 0;
   const invoiceItems = (items || []).map((item: any) => {
     const amount = Number(item.quantity || 1) * Number(item.rate);
@@ -56,10 +55,9 @@ export async function POST(request: NextRequest) {
     };
   });
 
-  // Calculate from time entries
   if (timeEntryIds?.length) {
     const timeEntries = await prisma.timeEntry.findMany({
-      where: { id: { in: timeEntryIds } },
+      where: { id: { in: timeEntryIds }, organizationId: orgId },
     });
     for (const entry of timeEntries) {
       subtotal += entry.amount;
@@ -79,6 +77,7 @@ export async function POST(request: NextRequest) {
 
   const invoice = await prisma.invoice.create({
     data: {
+      organizationId: orgId,
       invoiceNumber,
       clientId,
       caseId: caseId || null,
@@ -99,16 +98,16 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  // Mark time entries as billed
   if (timeEntryIds?.length) {
     await prisma.timeEntry.updateMany({
-      where: { id: { in: timeEntryIds } },
+      where: { id: { in: timeEntryIds }, organizationId: orgId },
       data: { isBilled: true, invoiceId: invoice.id },
     });
   }
 
   await prisma.auditLog.create({
     data: {
+      organizationId: orgId,
       userId: session!.user.id,
       action: "CREATE",
       entity: "Invoice",

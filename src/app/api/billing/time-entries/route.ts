@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth } from "@/lib/api-utils";
+import { withAuth, getOrgId } from "@/lib/api-utils";
 
 export async function GET(request: NextRequest) {
   const { error, session } = await withAuth("cases:read");
@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   const clientId = searchParams.get("clientId");
   const unbilledOnly = searchParams.get("unbilled") === "true";
 
-  const where: any = {};
+  const where: any = { organizationId: getOrgId(session!) };
   if (caseId) where.caseId = caseId;
   if (clientId) where.clientId = clientId;
   if (unbilledOnly) where.isBilled = false;
@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
 
   const entry = await prisma.timeEntry.create({
     data: {
+      organizationId: getOrgId(session!),
       userId: session!.user.id,
       caseId: caseId || null,
       clientId: clientId || null,

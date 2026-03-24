@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth } from "@/lib/api-utils";
+import { withAuth, getOrgId } from "@/lib/api-utils";
 import { lookupByCNR } from "@/lib/ecourts/service";
 
 // Sync a single case by its CNR number
@@ -14,7 +14,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Case ID is required" }, { status: 400 });
   }
 
-  const localCase = await prisma.case.findUnique({ where: { id: caseId } });
+  const orgId = getOrgId(session!);
+  const localCase = await prisma.case.findFirst({ where: { id: caseId, organizationId: orgId } });
   if (!localCase || !localCase.cnrNumber) {
     return NextResponse.json({ error: "Case not found or CNR not set" }, { status: 400 });
   }
@@ -86,6 +87,7 @@ export async function POST(request: NextRequest) {
     if (!existingDiary) {
       await prisma.diaryEntry.create({
         data: {
+          organizationId: orgId,
           caseId,
           date: nextHearingDate,
           courtName: ecourtData.courtName || localCase.courtName,
@@ -104,6 +106,7 @@ export async function POST(request: NextRequest) {
     if (!existingSchedule) {
       await prisma.scheduleEvent.create({
         data: {
+          organizationId: orgId,
           title: `Hearing: ${localCase.caseNumber}`,
           description: `${localCase.title}\nCourt: ${ecourtData.courtName || localCase.courtName}\nJudge: ${ecourtData.judge || "N/A"}`,
           date: nextHearingDate,
@@ -117,6 +120,7 @@ export async function POST(request: NextRequest) {
 
   await prisma.auditLog.create({
     data: {
+      organizationId: orgId,
       userId: session!.user.id,
       action: "ECOURTS_SYNC",
       entity: "Case",

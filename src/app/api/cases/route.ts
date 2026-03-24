@@ -1,18 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth } from "@/lib/api-utils";
+import { withAuth, getOrgId } from "@/lib/api-utils";
 
 export async function GET(request: NextRequest) {
-  const { error } = await withAuth("cases:read");
+  const { error, session } = await withAuth("cases:read");
   if (error) return error;
 
+  const organizationId = getOrgId(session!);
   const searchParams = request.nextUrl.searchParams;
   const search = searchParams.get("search") || "";
   const status = searchParams.get("status") || "";
   const page = parseInt(searchParams.get("page") || "1");
   const limit = parseInt(searchParams.get("limit") || "20");
 
-  const where: any = {};
+  const where: any = { organizationId };
   if (search) {
     where.OR = [
       { caseNumber: { contains: search } },
@@ -44,6 +45,7 @@ export async function POST(request: NextRequest) {
   const { error, session } = await withAuth("cases:write");
   if (error) return error;
 
+  const organizationId = getOrgId(session!);
   const body = await request.json();
   const {
     caseNumber, title, description, caseType, courtName, courtType, judge, filingDate, status, priority,
@@ -58,7 +60,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Client name is required" }, { status: 400 });
   }
 
-  const existingCase = await prisma.case.findUnique({ where: { caseNumber } });
+  const existingCase = await prisma.case.findFirst({ where: { caseNumber, organizationId } });
   if (existingCase) {
     return NextResponse.json({ error: "Case number already exists" }, { status: 400 });
   }
@@ -68,16 +70,16 @@ export async function POST(request: NextRequest) {
   const existingClientId = body.existingClientId;
 
   if (existingClientId) {
-    client = await prisma.client.findUnique({ where: { id: existingClientId } });
+    client = await prisma.client.findFirst({ where: { id: existingClientId, organizationId } });
   }
   if (!client && clientEmail) {
-    client = await prisma.client.findFirst({ where: { email: clientEmail } });
+    client = await prisma.client.findFirst({ where: { email: clientEmail, organizationId } });
   }
   if (!client && clientPhone) {
-    client = await prisma.client.findFirst({ where: { phone: clientPhone } });
+    client = await prisma.client.findFirst({ where: { phone: clientPhone, organizationId } });
   }
   if (!client) {
-    client = await prisma.client.findFirst({ where: { name: clientName } });
+    client = await prisma.client.findFirst({ where: { name: clientName, organizationId } });
   }
   if (!client) {
     client = await prisma.client.create({
@@ -87,6 +89,7 @@ export async function POST(request: NextRequest) {
         phone: clientPhone || null,
         address: clientAddress || null,
         clientType: clientType || "INDIVIDUAL",
+        organizationId,
       },
     });
   }
@@ -103,6 +106,7 @@ export async function POST(request: NextRequest) {
       filingDate: filingDate ? new Date(filingDate) : null,
       status: status || "ACTIVE",
       priority: priority || "MEDIUM",
+      organizationId,
     },
   });
 
@@ -122,6 +126,7 @@ export async function POST(request: NextRequest) {
       entity: "Case",
       entityId: newCase.id,
       details: `Created case: ${caseNumber} with client: ${clientName}`,
+      organizationId,
     },
   });
 

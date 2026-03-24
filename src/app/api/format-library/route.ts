@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth } from "@/lib/api-utils";
+import { withAuth, getOrgId } from "@/lib/api-utils";
 // NOTE: Do NOT import format-pipeline at top level — it pulls in chromadb +
 // @xenova/transformers which crash on Vercel serverless. Use dynamic import.
 import { writeFileSync, mkdirSync, existsSync, unlinkSync } from "fs";
@@ -16,14 +16,14 @@ const UPLOAD_DIR = process.env.VERCEL
   : join(process.cwd(), "uploads", "format-samples");
 
 export async function GET(request: NextRequest) {
-  const { error } = await withAuth("notices:read");
+  const { error, session } = await withAuth("notices:read");
   if (error) return error;
 
   const searchParams = request.nextUrl.searchParams;
   const category = searchParams.get("category");
   const activeOnly = searchParams.get("active") !== "false";
 
-  const where: any = {};
+  const where: any = { organizationId: getOrgId(session!) };
   if (category) where.category = category;
   if (activeOnly) where.isActive = true;
 
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { error } = await withAuth("settings:write");
+    const { error, session } = await withAuth("settings:write");
     if (error) return error;
 
     let formData: FormData;
@@ -126,6 +126,7 @@ export async function POST(request: NextRequest) {
 
     const sample = await prisma.formatSample.create({
       data: {
+        organizationId: getOrgId(session!),
         name,
         category,
         subcategory: subcategory || null,

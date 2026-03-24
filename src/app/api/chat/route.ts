@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth } from "@/lib/api-utils";
+import { withAuth, getOrgId } from "@/lib/api-utils";
+import { checkRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 // Dynamic imports for RAG — these pull in chromadb/@xenova/transformers which crash on Vercel at module level
 import { chatCompletion, buildRAGPrompt } from "@/lib/llm";
 import { searchAndSummarize } from "@/lib/indian-kanoon";
@@ -11,16 +12,16 @@ function fmt(d: Date | string | null) {
   return format(new Date(d), "dd MMM yyyy");
 }
 
-async function gatherDatabaseContext(query: string) {
+async function gatherDatabaseContext(query: string, organizationId: string) {
   const sections: string[] = [];
   const q = query.toLowerCase();
 
   // Always fetch summary counts
   const [clientCount, caseCount, docCount, pendingNotices] = await Promise.all([
-    prisma.client.count({ where: { isActive: true } }),
-    prisma.case.count({ where: { status: { not: "CLOSED" } } }),
-    prisma.document.count(),
-    prisma.notice.count({ where: { status: "PENDING_APPROVAL" } }),
+    prisma.client.count({ where: { isActive: true, organizationId } }),
+    prisma.case.count({ where: { status: { not: "CLOSED" }, organizationId } }),
+    prisma.document.count({ where: { organizationId } }),
+    prisma.notice.count({ where: { status: "PENDING_APPROVAL", organizationId } }),
   ]);
 
   sections.push(
@@ -29,7 +30,7 @@ async function gatherDatabaseContext(query: string) {
 
   // Fetch cases (always useful context)
   const cases = await prisma.case.findMany({
-    where: { status: { not: "CLOSED" } },
+    where: { status: { not: "CLOSED" }, organizationId },
     include: {
       caseClients: { include: { client: true } },
       caseAssignments: { include: { user: { select: { name: true, role: true } } } },
@@ -49,7 +50,7 @@ async function gatherDatabaseContext(query: string) {
 
   // Fetch clients
   const clients = await prisma.client.findMany({
-    where: { isActive: true },
+    where: { isActive: true, organizationId },
     include: {
       _count: { select: { caseClients: true, invoices: true } },
     },
@@ -69,6 +70,7 @@ async function gatherDatabaseContext(query: string) {
     where: {
       nextHearingDate: { gte: new Date() },
       status: "ACTIVE",
+      organizationId,
     },
     orderBy: { nextHearingDate: "asc" },
     take: 10,
@@ -85,6 +87,7 @@ async function gatherDatabaseContext(query: string) {
 
   // Diary entries
   const diaryEntries = await prisma.diaryEntry.findMany({
+    where: { organizationId },
     orderBy: { date: "desc" },
     take: 15,
     include: { case: { select: { caseNumber: true, title: true } } },
@@ -100,7 +103,7 @@ async function gatherDatabaseContext(query: string) {
   // Limitation trackers
   if (q.includes("limitation") || q.includes("deadline") || q.includes("expir") || q.includes("urgent")) {
     const trackers = await prisma.limitationTracker.findMany({
-      where: { status: "ACTIVE" },
+      where: { status: "ACTIVE", organizationId },
       orderBy: { deadlineDate: "asc" },
       take: 15,
       include: {
@@ -121,6 +124,7 @@ async function gatherDatabaseContext(query: string) {
   // Notices
   if (q.includes("notice") || q.includes("draft") || q.includes("approv") || q.includes("pending")) {
     const notices = await prisma.notice.findMany({
+      where: { organizationId },
       orderBy: { updatedAt: "desc" },
       take: 10,
       include: {
@@ -142,6 +146,7 @@ async function gatherDatabaseContext(query: string) {
   // Billing - invoices & time entries
   if (q.includes("bill") || q.includes("invoice") || q.includes("payment") || q.includes("revenue") || q.includes("fee") || q.includes("amount") || q.includes("paid") || q.includes("unpaid")) {
     const invoices = await prisma.invoice.findMany({
+      where: { organizationId },
       orderBy: { createdAt: "desc" },
       take: 15,
       include: {
@@ -158,7 +163,7 @@ async function gatherDatabaseContext(query: string) {
     }
 
     const unbilledEntries = await prisma.timeEntry.findMany({
-      where: { isBilled: false },
+      where: { isBilled: false, organizationId },
       orderBy: { date: "desc" },
       take: 15,
       include: {
@@ -179,7 +184,7 @@ async function gatherDatabaseContext(query: string) {
   // Schedule events
   if (q.includes("schedule") || q.includes("calendar") || q.includes("event") || q.includes("today") || q.includes("tomorrow") || q.includes("week") || q.includes("upcoming")) {
     const events = await prisma.scheduleEvent.findMany({
-      where: { date: { gte: new Date() } },
+      where: { date: { gte: new Date() }, organizationId },
       orderBy: { date: "asc" },
       take: 15,
     });
@@ -199,6 +204,17 @@ export async function POST(request: NextRequest) {
   const { error, session } = await withAuth("chat:use");
   if (error) return error;
 
+  // AI-specific rate limiting (stricter than general API)
+  const aiRateKey = `ai:${session!.user.id}`;
+  const { allowed: aiAllowed } = checkRateLimit(aiRateKey, RATE_LIMITS.ai);
+  if (!aiAllowed) {
+    return NextResponse.json(
+      { error: "AI query rate limit exceeded. Please wait a moment." },
+      { status: 429 }
+    );
+  }
+
+  const orgId = getOrgId(session!);
   const { message, sessionId, caseId, documentId } = await request.json();
 
   if (!message) {
@@ -217,6 +233,7 @@ export async function POST(request: NextRequest) {
   if (!chatSession) {
     chatSession = await prisma.chatSession.create({
       data: {
+        organizationId: orgId,
         userId: session!.user.id,
         title: message.substring(0, 50),
         caseId: caseId || null,
@@ -236,7 +253,7 @@ export async function POST(request: NextRequest) {
   });
 
   // Gather live database context
-  const dbContext = await gatherDatabaseContext(message);
+  const dbContext = await gatherDatabaseContext(message, orgId);
 
   // Perform semantic search on uploaded documents
   let docContext: string[] = [];
@@ -272,7 +289,7 @@ export async function POST(request: NextRequest) {
         // Fetch full text content from DB for the matched formats
         const matchedIds = formatResults.map((r) => r.formatSampleId);
         const fullSamples = await prisma.formatSample.findMany({
-          where: { id: { in: matchedIds }, isActive: true },
+          where: { id: { in: matchedIds }, isActive: true, organizationId: orgId },
           select: { id: true, name: true, category: true, subcategory: true, textContent: true },
         });
 
@@ -286,7 +303,7 @@ export async function POST(request: NextRequest) {
       } else {
         // Fallback: if ChromaDB has no indexed formats, use DB keyword matching
         const fallbackSamples = await prisma.formatSample.findMany({
-          where: { isActive: true },
+          where: { isActive: true, organizationId: orgId },
           select: { id: true, name: true, category: true, subcategory: true, textContent: true },
           take: 2,
         });
@@ -303,7 +320,7 @@ export async function POST(request: NextRequest) {
       // Fallback to simple DB query if semantic search fails
       try {
         const fallbackSamples = await prisma.formatSample.findMany({
-          where: { isActive: true },
+          where: { isActive: true, organizationId: orgId },
           select: { id: true, name: true, category: true, subcategory: true, textContent: true },
           take: 1,
         });
@@ -341,7 +358,7 @@ export async function POST(request: NextRequest) {
     try {
       // Try to find which case the user is asking about
       const allCases = await prisma.case.findMany({
-        where: { status: { not: "CLOSED" } },
+        where: { status: { not: "CLOSED" }, organizationId: orgId },
         select: { id: true, caseNumber: true, title: true },
       });
 
@@ -365,7 +382,7 @@ export async function POST(request: NextRequest) {
 
       if (matchedCaseId) {
         const docs = await prisma.document.findMany({
-          where: { caseId: matchedCaseId },
+          where: { caseId: matchedCaseId, organizationId: orgId },
           select: {
             id: true,
             title: true,
@@ -387,6 +404,7 @@ export async function POST(request: NextRequest) {
       } else {
         // If no specific case matched, search all documents
         const allDocs = await prisma.document.findMany({
+          where: { organizationId: orgId },
           select: {
             id: true,
             title: true,
@@ -455,6 +473,7 @@ export async function POST(request: NextRequest) {
           } else {
             const newClient = await prisma.client.create({
               data: {
+                organizationId: orgId,
                 name,
                 email: email || null,
                 phone: phone || null,
@@ -481,7 +500,7 @@ export async function POST(request: NextRequest) {
           } else {
             // Find the client
             const client = await prisma.client.findFirst({
-              where: { name: { contains: clientName } },
+              where: { name: { contains: clientName }, organizationId: orgId },
             });
             if (!client) {
               actionResult = { type: "CREATE_CASE", success: false, message: `Client "${clientName}" not found. Please create the client first.` };
@@ -489,6 +508,7 @@ export async function POST(request: NextRequest) {
             } else {
               const newCase = await prisma.case.create({
                 data: {
+                  organizationId: orgId,
                   caseNumber,
                   title,
                   description: description || null,

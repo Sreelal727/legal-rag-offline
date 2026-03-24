@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth } from "@/lib/api-utils";
+import { withAuth, getOrgId } from "@/lib/api-utils";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { error } = await withAuth("cases:read");
+  const { error, session } = await withAuth("cases:read");
   if (error) return error;
 
+  const orgId = getOrgId(session!);
   const { id } = await params;
-  const invoice = await prisma.invoice.findUnique({
-    where: { id },
+  const invoice = await prisma.invoice.findFirst({
+    where: { id, organizationId: orgId },
     include: {
       client: true,
       case: { select: { id: true, caseNumber: true, title: true } },
@@ -23,8 +24,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
   }
 
-  // Also get firm settings for the invoice header
-  const firm = await prisma.firmSettings.findUnique({ where: { id: "default" } });
+  // Get org settings for invoice header (replaces old FirmSettings)
+  const firm = await prisma.organization.findUnique({ where: { id: orgId } });
 
   return NextResponse.json({ invoice, firm });
 }
@@ -33,8 +34,12 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const { error, session } = await withAuth("cases:write");
   if (error) return error;
 
+  const orgId = getOrgId(session!);
   const { id } = await params;
   const body = await request.json();
+
+  const existing = await prisma.invoice.findFirst({ where: { id, organizationId: orgId } });
+  if (!existing) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
 
   const invoice = await prisma.invoice.update({
     where: { id },
@@ -47,6 +52,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 
   await prisma.auditLog.create({
     data: {
+      organizationId: orgId,
       userId: session!.user.id,
       action: "UPDATE",
       entity: "Invoice",

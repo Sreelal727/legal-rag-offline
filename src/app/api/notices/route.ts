@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth } from "@/lib/api-utils";
+import { withAuth, getOrgId } from "@/lib/api-utils";
 
 export async function GET(request: NextRequest) {
-  const { error } = await withAuth("notices:read");
+  const { error, session } = await withAuth("notices:read");
   if (error) return error;
 
   const searchParams = request.nextUrl.searchParams;
   const status = searchParams.get("status");
 
-  const where: any = {};
+  const where: any = { organizationId: getOrgId(session!) };
   if (status) where.status = status;
 
   const notices = await prisma.notice.findMany({
@@ -40,6 +40,7 @@ export async function POST(request: NextRequest) {
 
   const notice = await prisma.notice.create({
     data: {
+      organizationId: getOrgId(session!),
       templateId: templateId || null,
       caseId: caseId || null,
       clientId: clientId || null,
@@ -52,6 +53,7 @@ export async function POST(request: NextRequest) {
 
   await prisma.auditLog.create({
     data: {
+      organizationId: getOrgId(session!),
       userId: session!.user.id,
       action: "CREATE",
       entity: "Notice",

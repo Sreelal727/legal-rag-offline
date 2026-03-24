@@ -1,22 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth } from "@/lib/api-utils";
+import { withAuth, getOrgId } from "@/lib/api-utils";
 // Do NOT import vectorstore at top level — it pulls in chromadb which crashes on Vercel
 import { unlinkSync, existsSync } from "fs";
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { error } = await withAuth("notices:read");
+  const { error, session } = await withAuth("notices:read");
   if (error) return error;
 
   const { id } = await params;
-  const sample = await prisma.formatSample.findUnique({ where: { id } });
+  const sample = await prisma.formatSample.findFirst({ where: { id, organizationId: getOrgId(session!) } });
   if (!sample) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   return NextResponse.json(sample);
 }
 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { error } = await withAuth("settings:write");
+  const { error, session } = await withAuth("settings:write");
   if (error) return error;
 
   const { id } = await params;
@@ -37,11 +37,11 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
 }
 
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const { error } = await withAuth("settings:write");
+  const { error, session } = await withAuth("settings:write");
   if (error) return error;
 
   const { id } = await params;
-  const sample = await prisma.formatSample.findUnique({ where: { id } });
+  const sample = await prisma.formatSample.findFirst({ where: { id, organizationId: getOrgId(session!) } });
   if (!sample) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   // Delete file from disk (may not exist on serverless)

@@ -7,15 +7,24 @@ import { Users, Briefcase, FileText, Calendar, BookOpen, FileSignature, Clock, C
 import { format, isToday, isTomorrow, addDays, startOfDay } from "date-fns";
 import Link from "next/link";
 import { EcourtsSyncButton } from "@/components/ecourts-sync-button";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth-options";
+import { redirect } from "next/navigation";
 
 export default async function DashboardPage() {
+  const session = await getServerSession(authOptions);
+  const user = session?.user as any;
+  if (!user?.organizationId) redirect("/login");
+  const orgId = user.organizationId as string;
+
   const [clientCount, caseCount, documentCount, upcomingHearings, recentDiary, pendingNotices, scheduleEvents] =
     await Promise.all([
-      prisma.client.count({ where: { isActive: true } }),
-      prisma.case.count({ where: { status: { not: "CLOSED" } } }),
-      prisma.document.count(),
+      prisma.client.count({ where: { organizationId: orgId, isActive: true } }),
+      prisma.case.count({ where: { organizationId: orgId, status: { not: "CLOSED" } } }),
+      prisma.document.count({ where: { organizationId: orgId } }),
       prisma.case.findMany({
         where: {
+          organizationId: orgId,
           nextHearingDate: { gte: new Date() },
           status: "ACTIVE",
         },
@@ -24,13 +33,15 @@ export default async function DashboardPage() {
         include: { caseClients: { include: { client: true } } },
       }),
       prisma.diaryEntry.findMany({
+        where: { organizationId: orgId },
         orderBy: { date: "desc" },
         take: 5,
         include: { case: true },
       }),
-      prisma.notice.count({ where: { status: "PENDING_APPROVAL" } }),
+      prisma.notice.count({ where: { organizationId: orgId, status: "PENDING_APPROVAL" } }),
       prisma.scheduleEvent.findMany({
         where: {
+          organizationId: orgId,
           date: { gte: startOfDay(new Date()) },
         },
         orderBy: { date: "asc" },

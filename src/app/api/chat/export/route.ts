@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth } from "@/lib/api-utils";
+import { withAuth, getOrgId } from "@/lib/api-utils";
 import {
   Document,
   Packer,
@@ -374,7 +374,7 @@ function buildPdfFromContent(content: string, structure: FormatStructure | null)
 }
 
 export async function POST(request: NextRequest) {
-  const { error } = await withAuth("chat:use");
+  const { error, session } = await withAuth("chat:use");
   if (error) return error;
 
   const { content, format: exportFormat, formatSampleId } = await request.json();
@@ -387,8 +387,8 @@ export async function POST(request: NextRequest) {
   let structure: FormatStructure | null = null;
   if (formatSampleId) {
     try {
-      const sample = await prisma.formatSample.findUnique({
-        where: { id: formatSampleId },
+      const sample = await prisma.formatSample.findFirst({
+        where: { id: formatSampleId, organizationId: getOrgId(session!) },
         select: { textContent: true },
       });
       if (sample) {

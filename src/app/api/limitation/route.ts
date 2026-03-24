@@ -1,16 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth } from "@/lib/api-utils";
+import { withAuth, getOrgId } from "@/lib/api-utils";
 
 export async function GET(request: NextRequest) {
-  const { error } = await withAuth("cases:read");
+  const { error, session } = await withAuth("cases:read");
   if (error) return error;
 
   const searchParams = request.nextUrl.searchParams;
   const status = searchParams.get("status") || "ACTIVE";
   const caseId = searchParams.get("caseId");
 
-  const where: any = {};
+  const where: any = { organizationId: getOrgId(session!) };
   if (status !== "all") where.status = status;
   if (caseId) where.caseId = caseId;
 
@@ -30,6 +30,7 @@ export async function POST(request: NextRequest) {
   const { error, session } = await withAuth("cases:write");
   if (error) return error;
 
+  const orgId = getOrgId(session!);
   const body = await request.json();
   const {
     caseId, clientId, title, description, category,
@@ -50,6 +51,7 @@ export async function POST(request: NextRequest) {
 
   const tracker = await prisma.limitationTracker.create({
     data: {
+      organizationId: orgId,
       caseId: caseId || null,
       clientId: clientId || null,
       title,
@@ -66,11 +68,11 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  // Auto-create schedule event for the deadline
   await prisma.scheduleEvent.create({
     data: {
+      organizationId: orgId,
       title: `DEADLINE: ${title}`,
-      description: `Limitation deadline${caseId ? "" : ""}\n${description || ""}`,
+      description: `Limitation deadline\n${description || ""}`,
       date: deadline,
       eventType: "DEADLINE",
       caseId: caseId || null,
@@ -78,12 +80,12 @@ export async function POST(request: NextRequest) {
     },
   });
 
-  // Create alert schedule event (X days before deadline)
   const alertDate = new Date(deadline);
   alertDate.setDate(alertDate.getDate() - Number(alertDays || 30));
   if (alertDate > new Date()) {
     await prisma.scheduleEvent.create({
       data: {
+        organizationId: orgId,
         title: `ALERT: ${title} - ${alertDays || 30} days remaining`,
         description: `Limitation deadline approaching for: ${title}`,
         date: alertDate,
@@ -96,6 +98,7 @@ export async function POST(request: NextRequest) {
 
   await prisma.auditLog.create({
     data: {
+      organizationId: orgId,
       userId: session!.user.id,
       action: "CREATE",
       entity: "LimitationTracker",

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth } from "@/lib/api-utils";
+import { withAuth, getOrgId } from "@/lib/api-utils";
 
 // Receive scraped case data from the Chrome extension
 export async function POST(request: NextRequest) {
@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "No case data provided" }, { status: 400 });
   }
 
+  const orgId = getOrgId(session!);
   let imported = 0;
   let skipped = 0;
   let failed = 0;
@@ -21,13 +22,13 @@ export async function POST(request: NextRequest) {
     try {
       if (type === "case_detail") {
         // Full case detail scraped from CNR lookup page
-        const result = await importCaseDetail(caseData, session!.user.id);
+        const result = await importCaseDetail(caseData, session!.user.id, orgId);
         if (result === "imported") imported++;
         else if (result === "skipped") skipped++;
         else failed++;
       } else {
         // Search result — has less data but may have CNR
-        const result = await importSearchResult(caseData, session!.user.id);
+        const result = await importSearchResult(caseData, session!.user.id, orgId);
         if (result === "imported") imported++;
         else if (result === "skipped") skipped++;
         else failed++;
@@ -40,6 +41,7 @@ export async function POST(request: NextRequest) {
 
   await prisma.auditLog.create({
     data: {
+      organizationId: orgId,
       userId: session!.user.id,
       action: "EXTENSION_IMPORT",
       entity: "Case",
@@ -81,12 +83,12 @@ function detectCaseType(typeStr: string): string {
 }
 
 // Import a full case detail (from CNR lookup page scrape)
-async function importCaseDetail(data: any, userId: string): Promise<string> {
+async function importCaseDetail(data: any, userId: string, orgId: string): Promise<string> {
   const cnr = data.cnrNumber?.toUpperCase();
 
   // Check for duplicate
   if (cnr) {
-    const existing = await prisma.case.findUnique({ where: { cnrNumber: cnr } });
+    const existing = await prisma.case.findFirst({ where: { cnrNumber: cnr, organizationId: orgId } });
     if (existing) return "skipped";
   }
 
@@ -96,6 +98,7 @@ async function importCaseDetail(data: any, userId: string): Promise<string> {
 
   const newCase = await prisma.case.create({
     data: {
+      organizationId: orgId,
       caseNumber: data.caseNumber || cnr || "SCRAPED-" + Date.now(),
       cnrNumber: cnr || undefined,
       title,
@@ -134,6 +137,7 @@ async function importCaseDetail(data: any, userId: string): Promise<string> {
   if (nextHearingDate && nextHearingDate > new Date()) {
     await prisma.diaryEntry.create({
       data: {
+        organizationId: orgId,
         caseId: newCase.id,
         date: nextHearingDate,
         courtName: data.courtName || "",
@@ -147,11 +151,11 @@ async function importCaseDetail(data: any, userId: string): Promise<string> {
   // Find/create client from petitioner
   if (data.petitioner) {
     let client = await prisma.client.findFirst({
-      where: { name: { contains: data.petitioner.split(" ")[0] } },
+      where: { organizationId: orgId, name: { contains: data.petitioner.split(" ")[0] } },
     });
     if (!client) {
       client = await prisma.client.create({
-        data: { name: data.petitioner, clientType: "INDIVIDUAL" },
+        data: { organizationId: orgId, name: data.petitioner, clientType: "INDIVIDUAL" },
       });
     }
     await prisma.caseClient.create({
@@ -168,12 +172,12 @@ async function importCaseDetail(data: any, userId: string): Promise<string> {
 }
 
 // Import a search result (less data, may not have full details)
-async function importSearchResult(data: any, userId: string): Promise<string> {
+async function importSearchResult(data: any, userId: string, orgId: string): Promise<string> {
   const cnr = data.cnrNumber?.toUpperCase();
 
   // Check for duplicate by CNR or case number
   if (cnr) {
-    const existing = await prisma.case.findUnique({ where: { cnrNumber: cnr } });
+    const existing = await prisma.case.findFirst({ where: { cnrNumber: cnr, organizationId: orgId } });
     if (existing) return "skipped";
   }
 
@@ -183,6 +187,7 @@ async function importSearchResult(data: any, userId: string): Promise<string> {
 
   const newCase = await prisma.case.create({
     data: {
+      organizationId: orgId,
       caseNumber: data.caseNumber || cnr || "SCRAPED-" + Date.now(),
       cnrNumber: cnr || undefined,
       title,
@@ -200,11 +205,11 @@ async function importSearchResult(data: any, userId: string): Promise<string> {
   // Find/create client from petitioner
   if (data.petitioner) {
     let client = await prisma.client.findFirst({
-      where: { name: { contains: data.petitioner.split(" ")[0] } },
+      where: { organizationId: orgId, name: { contains: data.petitioner.split(" ")[0] } },
     });
     if (!client) {
       client = await prisma.client.create({
-        data: { name: data.petitioner, clientType: "INDIVIDUAL" },
+        data: { organizationId: orgId, name: data.petitioner, clientType: "INDIVIDUAL" },
       });
     }
     await prisma.caseClient.create({

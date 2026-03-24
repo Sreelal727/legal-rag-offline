@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { withAuth } from "@/lib/api-utils";
+import { withAuth, getOrgId } from "@/lib/api-utils";
 
 export async function GET(request: NextRequest) {
-  const { error } = await withAuth("schedule:read");
+  const { error, session } = await withAuth("schedule:read");
   if (error) return error;
 
   const searchParams = request.nextUrl.searchParams;
   const from = searchParams.get("from");
   const to = searchParams.get("to");
 
-  const where: any = {};
+  const where: any = {
+    organizationId: getOrgId(session!),
+  };
   if (from) where.date = { ...(where.date || {}), gte: new Date(from) };
   if (to) where.date = { ...(where.date || {}), lte: new Date(to) };
 
@@ -43,6 +45,7 @@ export async function POST(request: NextRequest) {
       caseId,
       isAllDay: isAllDay || false,
       reminder: reminder || false,
+      organizationId: getOrgId(session!),
     },
   });
 
@@ -52,6 +55,7 @@ export async function POST(request: NextRequest) {
       action: "CREATE",
       entity: "ScheduleEvent",
       entityId: event.id,
+      organizationId: getOrgId(session!),
     },
   });
 
