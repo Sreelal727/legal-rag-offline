@@ -121,6 +121,83 @@ const migrations = [
   // DocumentSubmission table
   `ALTER TABLE "DocumentSubmission" ADD COLUMN "organizationId" TEXT REFERENCES "Organization"("id") ON DELETE CASCADE`,
   `UPDATE "DocumentSubmission" SET "organizationId" = 'default-org' WHERE "organizationId" IS NULL`,
+
+  // ScrutinyReport table
+  `CREATE TABLE IF NOT EXISTS "ScrutinyReport" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "title" TEXT NOT NULL,
+    "referenceNumber" TEXT,
+    "bankName" TEXT,
+    "branchName" TEXT,
+    "borrowerName" TEXT,
+    "propertyAddress" TEXT,
+    "surveyNumbers" TEXT,
+    "status" TEXT NOT NULL DEFAULT 'DRAFT',
+    "processingStatus" TEXT,
+    "formatSampleId" TEXT,
+    "caseId" TEXT REFERENCES "Case"("id") ON DELETE SET NULL,
+    "clientId" TEXT REFERENCES "Client"("id") ON DELETE SET NULL,
+    "createdBy" TEXT NOT NULL REFERENCES "User"("id"),
+    "organizationId" TEXT NOT NULL REFERENCES "Organization"("id") ON DELETE CASCADE,
+    "reportContent" TEXT,
+    "reportNotes" TEXT,
+    "verificationData" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+
+  // PropertyDocument table
+  `CREATE TABLE IF NOT EXISTS "PropertyDocument" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "scrutinyReportId" TEXT NOT NULL REFERENCES "ScrutinyReport"("id") ON DELETE CASCADE,
+    "documentId" TEXT REFERENCES "Document"("id") ON DELETE SET NULL,
+    "pageRange" TEXT,
+    "documentType" TEXT NOT NULL DEFAULT 'UNKNOWN',
+    "classification" TEXT,
+    "extractedFields" TEXT,
+    "extractedText" TEXT,
+    "language" TEXT DEFAULT 'en',
+    "ocrRequired" INTEGER NOT NULL DEFAULT 0,
+    "ocrCompleted" INTEGER NOT NULL DEFAULT 0,
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "notes" TEXT,
+    "verificationStatus" TEXT DEFAULT 'PENDING',
+    "verificationNotes" TEXT,
+    "filePath" TEXT,
+    "fileName" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
+
+  // DeedChainNode table
+  `CREATE TABLE IF NOT EXISTS "DeedChainNode" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "scrutinyReportId" TEXT NOT NULL REFERENCES "ScrutinyReport"("id") ON DELETE CASCADE,
+    "propertyDocumentId" TEXT REFERENCES "PropertyDocument"("id") ON DELETE SET NULL,
+    "documentNumber" TEXT,
+    "registrationYear" INTEGER,
+    "sroName" TEXT,
+    "executionDate" DATETIME,
+    "registrationDate" DATETIME,
+    "deedType" TEXT,
+    "grantor" TEXT,
+    "grantee" TEXT,
+    "surveyNumbers" TEXT,
+    "area" REAL,
+    "areaUnit" TEXT DEFAULT 'cents',
+    "areaOriginal" TEXT,
+    "consideration" REAL,
+    "stampDuty" REAL,
+    "parentNodeIds" TEXT,
+    "referencedDeedNos" TEXT,
+    "isMissing" INTEGER NOT NULL DEFAULT 0,
+    "isLatest" INTEGER NOT NULL DEFAULT 0,
+    "chainDepth" INTEGER NOT NULL DEFAULT 0,
+    "verificationFlags" TEXT,
+    "notes" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+  )`,
 ];
 
 async function main() {
