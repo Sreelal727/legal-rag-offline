@@ -7,8 +7,6 @@ export default defineConfig({
     path: "prisma/migrations",
   },
   datasource: {
-    // Used by Prisma CLI (migrate/push). Points to local SQLite for schema operations.
-    // Runtime connections go through the libSQL adapter to Turso.
-    url: process.env["DATABASE_URL"]!,
+    url: process.env["DATABASE_URL"] || "file:./data/legal-rag.db",
   },
 });

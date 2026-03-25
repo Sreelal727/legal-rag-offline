@@ -6,16 +6,14 @@ dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
 import { PrismaClient } from "../src/generated/prisma/client";
-import { PrismaLibSql } from "@prisma/adapter-libsql";
+import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import bcrypt from "bcryptjs";
 
 async function main() {
-  console.log("Connecting to Turso:", process.env.TURSO_DATABASE_URL?.substring(0, 40));
+  const dbPath = process.env.DATABASE_PATH || "./data/legal-rag.db";
+  console.log("Connecting to local SQLite:", dbPath);
 
-  const adapter = new PrismaLibSql({
-    url: process.env.TURSO_DATABASE_URL!,
-    authToken: process.env.TURSO_AUTH_TOKEN,
-  });
+  const adapter = new PrismaBetterSqlite3({ url: dbPath });
   const prisma = new PrismaClient({ adapter } as any);
   const hashedPassword = await bcrypt.hash("admin123", 12);
 
