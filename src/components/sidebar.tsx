@@ -21,6 +21,7 @@ import {
   Clock,
   Receipt,
   FileCheck,
+  SearchCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { hasPermission, type Role, type Permission } from "@/lib/permissions";
@@ -32,6 +33,7 @@ const navItems = [
   { href: "/ecourts", label: "eCourts/DCMS", icon: Scale, permission: "cases:read" as Permission },
   { href: "/submissions", label: "Doc Submissions", icon: FileCheck, permission: "cases:read" as Permission },
   { href: "/documents", label: "Documents", icon: FileText, permission: "documents:read" as Permission },
+  { href: "/scrutiny", label: "Scrutiny Reports", icon: SearchCheck, permission: "scrutiny:read" as Permission },
   { href: "/diary", label: "Court Diary", icon: BookOpen, permission: "diary:read" as Permission },
   { href: "/schedule", label: "Schedule", icon: Calendar, permission: "schedule:read" as Permission },
   { href: "/limitation", label: "Limitation Tracker", icon: Clock, permission: "limitation:read" as Permission },

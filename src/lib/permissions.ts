@@ -12,7 +12,8 @@ export type Permission =
   | "billing:read" | "billing:write"
   | "users:read" | "users:write" | "users:delete"
   | "settings:read" | "settings:write"
-  | "audit:read";
+  | "audit:read"
+  | "scrutiny:read" | "scrutiny:write" | "scrutiny:approve";
 
 const rolePermissions: Record<Role, Permission[]> = {
   ADMIN: [
@@ -28,6 +29,7 @@ const rolePermissions: Record<Role, Permission[]> = {
     "users:read", "users:write", "users:delete",
     "settings:read", "settings:write",
     "audit:read",
+    "scrutiny:read", "scrutiny:write", "scrutiny:approve",
   ],
   SENIOR_ADVOCATE: [
     "clients:read", "clients:write",
@@ -40,6 +42,7 @@ const rolePermissions: Record<Role, Permission[]> = {
     "limitation:read", "limitation:write",
     "billing:read", "billing:write",
     "users:read",
+    "scrutiny:read", "scrutiny:write", "scrutiny:approve",
   ],
   JUNIOR_ADVOCATE: [
     "clients:read", "clients:write",
@@ -51,6 +54,7 @@ const rolePermissions: Record<Role, Permission[]> = {
     "chat:use",
     "limitation:read", "limitation:write",
     "billing:read", "billing:write",
+    "scrutiny:read", "scrutiny:write",
   ],
   CLERK: [
     "clients:read", "clients:write",
@@ -61,6 +65,7 @@ const rolePermissions: Record<Role, Permission[]> = {
     "notices:read",
     "limitation:read",
     "billing:read",
+    "scrutiny:read",
   ],
   INTERN: [
     "clients:read",
@@ -96,6 +101,7 @@ export function canAccessRoute(role: Role, path: string): boolean {
     "/limitation": "limitation:read",
     "/billing": "billing:read",
     "/audit": "audit:read",
+    "/scrutiny": "scrutiny:read",
   };
 
   for (const [route, permission] of Object.entries(routePermissions)) {

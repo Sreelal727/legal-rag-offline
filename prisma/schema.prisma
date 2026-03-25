@@ -44,6 +44,7 @@ model Organization {
   limitationTrackers LimitationTracker[]
   documentSubmissions DocumentSubmission[]
   passwordResetTokens PasswordResetToken[]
+  scrutinyReports    ScrutinyReport[]
 }
 
 model User {
@@ -73,6 +74,7 @@ model User {
   assignedSubmissions DocumentSubmission[] @relation("AssignedSubmissions")
   createdSubmissions  DocumentSubmission[] @relation("CreatedSubmissions")
   passwordResetTokens PasswordResetToken[]
+  scrutinyReports    ScrutinyReport[]
 }
 
 model Session {
@@ -118,6 +120,7 @@ model Client {
   timeEntries    TimeEntry[]
   invoices       Invoice[]
   documentSubmissions DocumentSubmission[]
+  scrutinyReports ScrutinyReport[]
 }
 
 model Case {
@@ -154,6 +157,7 @@ model Case {
   timeEntries     TimeEntry[]
   invoices        Invoice[]
   documentSubmissions DocumentSubmission[]
+  scrutinyReports ScrutinyReport[]
 }
 
 model CaseClient {
@@ -209,6 +213,7 @@ model Document {
   organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   case           Case?           @relation(fields: [caseId], references: [id], onDelete: SetNull)
   chunks         DocumentChunk[]
+  propertyDocuments PropertyDocument[]
 }
 
 model DocumentChunk {
@@ -463,4 +468,89 @@ model DocumentSubmission {
   client         Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
   assignee       User?     @relation("AssignedSubmissions", fields: [assignedTo], references: [id], onDelete: SetNull)
   creator        User      @relation("CreatedSubmissions", fields: [createdBy], references: [id])
+}
+
+model ScrutinyReport {
+  id                String   @id @default(uuid())
+  title             String
+  referenceNumber   String?
+  bankName          String?
+  branchName        String?
+  borrowerName      String?
+  propertyAddress   String?
+  surveyNumbers     String?
+  status            String   @default("DRAFT")
+  processingStatus  String?
+  formatSampleId    String?
+  caseId            String?
+  clientId          String?
+  createdBy         String
+  organizationId    String
+  reportContent     String?
+  reportNotes       String?
+  verificationData  String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  case              Case?        @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  client            Client?      @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  creator           User         @relation(fields: [createdBy], references: [id])
+  propertyDocuments PropertyDocument[]
+  deedChainNodes    DeedChainNode[]
+}
+
+model PropertyDocument {
+  id                 String   @id @default(uuid())
+  scrutinyReportId   String
+  documentId         String?
+  pageRange          String?
+  documentType       String   @default("UNKNOWN")
+  classification     String?
+  extractedFields    String?
+  extractedText      String?
+  language           String?  @default("en")
+  ocrRequired        Boolean  @default(false)
+  ocrCompleted       Boolean  @default(false)
+  sortOrder          Int      @default(0)
+  notes              String?
+  verificationStatus String?  @default("PENDING")
+  verificationNotes  String?
+  filePath           String?
+  fileName           String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  scrutinyReport     ScrutinyReport @relation(fields: [scrutinyReportId], references: [id], onDelete: Cascade)
+  document           Document?      @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  deedChainNodes     DeedChainNode[]
+}
+
+model DeedChainNode {
+  id                 String    @id @default(uuid())
+  scrutinyReportId   String
+  propertyDocumentId String?
+  documentNumber     String?
+  registrationYear   Int?
+  sroName            String?
+  executionDate      DateTime?
+  registrationDate   DateTime?
+  deedType           String?
+  grantor            String?
+  grantee            String?
+  surveyNumbers      String?
+  area               Float?
+  areaUnit           String?   @default("cents")
+  areaOriginal       String?
+  consideration      Float?
+  stampDuty          Float?
+  parentNodeIds      String?
+  referencedDeedNos  String?
+  isMissing          Boolean   @default(false)
+  isLatest           Boolean   @default(false)
+  chainDepth         Int       @default(0)
+  verificationFlags  String?
+  notes              String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  scrutinyReport     ScrutinyReport   @relation(fields: [scrutinyReportId], references: [id], onDelete: Cascade)
+  propertyDocument   PropertyDocument? @relation(fields: [propertyDocumentId], references: [id], onDelete: SetNull)
 }
