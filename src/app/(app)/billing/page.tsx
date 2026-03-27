@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Fragment } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -530,6 +530,8 @@ export default function BillingPage() {
         <TabsList>
           <TabsTrigger value="time">Time Entries</TabsTrigger>
           <TabsTrigger value="invoices">Invoices</TabsTrigger>
+          <TabsTrigger value="courtfees">Court Fees</TabsTrigger>
+          <TabsTrigger value="feeagreements">Fee Agreements</TabsTrigger>
         </TabsList>
 
         <TabsContent value="time">
@@ -598,7 +600,242 @@ export default function BillingPage() {
             </div>
           )}
         </TabsContent>
+
+        <TabsContent value="courtfees">
+          <CourtFeesTab cases={cases} />
+        </TabsContent>
+
+        <TabsContent value="feeagreements">
+          <FeeAgreementsTab cases={cases} clients={clients} />
+        </TabsContent>
       </Tabs>
+    </div>
+  );
+}
+
+// ─── Court Fees Tab ───────────────────────────────────────────────────────────
+
+function CourtFeesTab({ cases }: { cases: any[] }) {
+  const [entries, setEntries] = useState<any[]>([]);
+  const [addOpen, setAddOpen] = useState(false);
+  const [form, setForm] = useState({
+    caseId: "", amount: "", feeType: "COURT_FEE",
+    description: "", paidDate: "", receiptNumber: "", isPaid: false,
+  });
+
+  const fetch_ = useCallback(async () => {
+    const res = await fetch("/api/court-fees");
+    if (res.ok) { const d = await res.json(); setEntries(Array.isArray(d) ? d : []); }
+  }, []);
+
+  useEffect(() => { fetch_(); }, [fetch_]);
+
+  const handleAdd = async () => {
+    if (!form.caseId || !form.amount) { toast.error("Case and amount required"); return; }
+    const res = await fetch("/api/court-fees", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(form),
+    });
+    if (res.ok) { toast.success("Fee entry added"); setAddOpen(false); fetch_(); } else { toast.error("Failed"); }
+  };
+
+  const handleDelete = async (id: string) => {
+    const res = await fetch(`/api/court-fees/${id}`, { method: "DELETE" });
+    if (res.ok) { toast.success("Deleted"); fetch_(); }
+  };
+
+  const totalDue = entries.filter((e) => !e.isPaid).reduce((s: number, e: any) => s + e.amount, 0);
+  const totalPaid = entries.filter((e) => e.isPaid).reduce((s: number, e: any) => s + e.amount, 0);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex gap-4">
+          <div className="text-center"><p className="text-2xl font-bold text-red-600">₹{totalDue.toLocaleString()}</p><p className="text-xs text-muted-foreground">Pending</p></div>
+          <div className="text-center"><p className="text-2xl font-bold text-green-600">₹{totalPaid.toLocaleString()}</p><p className="text-xs text-muted-foreground">Paid</p></div>
+        </div>
+        <RoleGate permission="billing:write">
+          <Button onClick={() => setAddOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Add Court Fee
+          </Button>
+        </RoleGate>
+      </div>
+
+      {entries.length === 0 ? (
+        <p className="text-center py-10 text-muted-foreground">No court fee entries</p>
+      ) : (
+        <div className="space-y-2">
+          {entries.map((entry: any) => (
+            <Card key={entry.id} className={entry.isPaid ? "opacity-70" : ""}>
+              <CardContent className="p-3 flex items-center justify-between">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">₹{entry.amount.toLocaleString()}</span>
+                    <Badge variant={entry.isPaid ? "default" : "destructive"}>
+                      {entry.isPaid ? "Paid" : "Pending"}
+                    </Badge>
+                    <Badge variant="outline">{entry.feeType.replace(/_/g, " ")}</Badge>
+                  </div>
+                  <div className="text-xs text-muted-foreground flex gap-2 mt-1">
+                    {entry.case && <span>Case: {entry.case.caseNumber}</span>}
+                    {entry.description && <span>{entry.description}</span>}
+                    {entry.receiptNumber && <span>Receipt: {entry.receiptNumber}</span>}
+                    {entry.paidDate && <span>Paid: {format(new Date(entry.paidDate), "dd MMM yyyy")}</span>}
+                  </div>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => handleDelete(entry.id)}>
+                  <Trash2 className="h-4 w-4 text-destructive" />
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Add Court Fee Entry</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Case *</Label>
+              <Select value={form.caseId} onValueChange={(v: any) => setForm({ ...form, caseId: String(v || "") })}>
+                <SelectTrigger><SelectValue placeholder="Select case" /></SelectTrigger>
+                <SelectContent>{cases.map((c) => <SelectItem key={c.id} value={c.id}>{c.caseNumber} - {c.title}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Amount (₹) *</Label><Input type="number" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} /></div>
+              <div>
+                <Label>Fee Type</Label>
+                <Select value={form.feeType} onValueChange={(v: any) => setForm({ ...form, feeType: String(v || "COURT_FEE") })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="COURT_FEE">Court Fee</SelectItem>
+                    <SelectItem value="PROCESS_FEE">Process Fee</SelectItem>
+                    <SelectItem value="ADVOCATE_FEE">Advocate Fee</SelectItem>
+                    <SelectItem value="MISC">Miscellaneous</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div><Label>Description</Label><Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Paid Date</Label><Input type="date" value={form.paidDate} onChange={(e) => setForm({ ...form, paidDate: e.target.value })} /></div>
+              <div><Label>Receipt No.</Label><Input value={form.receiptNumber} onChange={(e) => setForm({ ...form, receiptNumber: e.target.value })} /></div>
+            </div>
+            <div className="flex items-center gap-2">
+              <input type="checkbox" id="isPaid" checked={form.isPaid} onChange={(e) => setForm({ ...form, isPaid: e.target.checked })} />
+              <Label htmlFor="isPaid">Already Paid</Label>
+            </div>
+            <Button onClick={handleAdd} className="w-full">Add Entry</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ─── Fee Agreements Tab ───────────────────────────────────────────────────────
+
+function FeeAgreementsTab({ cases, clients }: { cases: any[]; clients: any[] }) {
+  const [agreements, setAgreements] = useState<any[]>([]);
+  const [addOpen, setAddOpen] = useState(false);
+  const [form, setForm] = useState({
+    clientId: "", caseId: "",
+    agreementDate: new Date().toISOString().split("T")[0],
+    totalFee: "", retainerFee: "", appearanceFee: "", successFee: "",
+    paymentTerms: "", notes: "",
+  });
+
+  const fetch_ = useCallback(async () => {
+    const res = await fetch("/api/fee-agreements");
+    if (res.ok) { const d = await res.json(); setAgreements(Array.isArray(d) ? d : []); }
+  }, []);
+
+  useEffect(() => { fetch_(); }, [fetch_]);
+
+  const handleAdd = async () => {
+    if (!form.clientId || !form.totalFee) { toast.error("Client and total fee required"); return; }
+    const res = await fetch("/api/fee-agreements", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(form),
+    });
+    if (res.ok) { toast.success("Fee agreement added"); setAddOpen(false); fetch_(); } else { toast.error("Failed"); }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">{agreements.length} fee agreement(s)</p>
+        <RoleGate permission="billing:write">
+          <Button onClick={() => setAddOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" /> New Fee Agreement
+          </Button>
+        </RoleGate>
+      </div>
+
+      {agreements.length === 0 ? (
+        <p className="text-center py-10 text-muted-foreground">No fee agreements</p>
+      ) : (
+        <div className="space-y-2">
+          {agreements.map((ag: any) => (
+            <Card key={ag.id}>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium">{ag.client?.name} — ₹{ag.totalFee.toLocaleString()}</p>
+                    <div className="text-xs text-muted-foreground flex gap-3 mt-1">
+                      {ag.case && <span>Case: {ag.case.caseNumber}</span>}
+                      <span>Date: {format(new Date(ag.agreementDate), "dd MMM yyyy")}</span>
+                      {ag.retainerFee > 0 && <span>Retainer: ₹{ag.retainerFee.toLocaleString()}</span>}
+                      {ag.appearanceFee > 0 && <span>Per Appearance: ₹{ag.appearanceFee.toLocaleString()}</span>}
+                      {ag.successFee > 0 && <span>Success Fee: ₹{ag.successFee.toLocaleString()}</span>}
+                    </div>
+                    {ag.paymentTerms && <p className="text-xs text-muted-foreground mt-1">{ag.paymentTerms}</p>}
+                  </div>
+                  <Badge variant={ag.status === "ACTIVE" ? "default" : "secondary"}>{ag.status}</Badge>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle>New Fee Agreement</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <Label>Client *</Label>
+              <Select value={form.clientId} onValueChange={(v: any) => setForm({ ...form, clientId: String(v || "") })}>
+                <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
+                <SelectContent>{clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Link to Case</Label>
+              <Select value={form.caseId} onValueChange={(v: any) => setForm({ ...form, caseId: v === "none" ? "" : String(v || "") })}>
+                <SelectTrigger><SelectValue placeholder="Select case (optional)" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None</SelectItem>
+                  {cases.map((c) => <SelectItem key={c.id} value={c.id}>{c.caseNumber} - {c.title}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label>Agreement Date *</Label><Input type="date" value={form.agreementDate} onChange={(e) => setForm({ ...form, agreementDate: e.target.value })} /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><Label>Total Fee (₹) *</Label><Input type="number" value={form.totalFee} onChange={(e) => setForm({ ...form, totalFee: e.target.value })} /></div>
+              <div><Label>Retainer Fee (₹)</Label><Input type="number" value={form.retainerFee} onChange={(e) => setForm({ ...form, retainerFee: e.target.value })} /></div>
+              <div><Label>Per Appearance (₹)</Label><Input type="number" value={form.appearanceFee} onChange={(e) => setForm({ ...form, appearanceFee: e.target.value })} /></div>
+              <div><Label>Success Fee (₹)</Label><Input type="number" value={form.successFee} onChange={(e) => setForm({ ...form, successFee: e.target.value })} /></div>
+            </div>
+            <div><Label>Payment Terms</Label><Textarea value={form.paymentTerms} onChange={(e) => setForm({ ...form, paymentTerms: e.target.value })} rows={2} /></div>
+            <Button onClick={handleAdd} className="w-full">Save Agreement</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

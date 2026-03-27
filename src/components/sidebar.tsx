@@ -24,6 +24,7 @@ import {
   SearchCheck,
   Stamp,
   Gavel,
+  Building2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { hasPermission, type Role, type Permission } from "@/lib/permissions";
@@ -45,6 +46,7 @@ const navItems = [
   { href: "/notices", label: "Notices", icon: FileSignature, permission: "notices:read" as Permission },
   { href: "/format-library", label: "Format Library", icon: FileText, permission: "notices:read" as Permission },
   { href: "/billing", label: "Billing", icon: Receipt, permission: "billing:read" as Permission },
+  { href: "/bank-opinion", label: "Bank Opinion", icon: Building2, permission: "cases:read" as Permission },
   { href: "/chat", label: "AI Chat", icon: MessageSquare, permission: "chat:use" as Permission },
   { href: "/users", label: "Users", icon: UserCog, permission: "users:read" as Permission },
   { href: "/settings", label: "Settings", icon: Settings, permission: "settings:read" as Permission },
