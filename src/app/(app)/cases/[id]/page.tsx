@@ -8,10 +8,27 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowLeft, Calendar, FileText, Users, BookOpen, Scale, RefreshCw, Loader2 } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ArrowLeft, Calendar, FileText, Users, BookOpen, Scale, RefreshCw, Loader2, Plus, Trash2, UserX, MapPin, Phone } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { toast } from "sonner";
+
+const PARTY_TYPES = ["RESPONDENT", "DEFENDANT", "OPPOSITE_PARTY", "ACCUSED"];
 
 export default function CaseDetailPage() {
   const params = useParams();
@@ -141,6 +158,8 @@ export default function CaseDetailPage() {
             <p className="text-sm"><strong>Type:</strong> {caseData.courtType?.replace(/_/g, " ")}</p>
             <p className="text-sm"><strong>Judge:</strong> {caseData.judge || "N/A"}</p>
             <p className="text-sm"><strong>Case Type:</strong> {caseData.caseType}</p>
+            {caseData.caseSubType && <p className="text-sm"><strong>Sub Type:</strong> {caseData.caseSubType.replace(/_/g, " ")}</p>}
+            {caseData.stage && <p className="text-sm"><strong>Stage:</strong> {caseData.stage.replace(/_/g, " ")}</p>}
           </CardContent>
         </Card>
         <Card>
@@ -154,12 +173,15 @@ export default function CaseDetailPage() {
               <strong>Next Hearing:</strong>{" "}
               {caseData.nextHearingDate ? format(new Date(caseData.nextHearingDate), "dd MMM yyyy") : "N/A"}
             </p>
+            {caseData.suitValue != null && <p className="text-sm"><strong>Suit Value:</strong> Rs. {caseData.suitValue.toLocaleString("en-IN")}</p>}
+            {caseData.courtFee != null && <p className="text-sm"><strong>Court Fee:</strong> Rs. {caseData.courtFee.toLocaleString("en-IN")}</p>}
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 space-y-2">
             <p className="text-sm"><strong>Documents:</strong> {caseData.documents?.length || 0}</p>
             <p className="text-sm"><strong>Events:</strong> {caseData.caseEvents?.length || 0}</p>
+            <p className="text-sm"><strong>Opposite Parties:</strong> {caseData.oppositeParties?.length || 0}</p>
           </CardContent>
         </Card>
       </div>
@@ -175,7 +197,7 @@ export default function CaseDetailPage() {
         <TabsContent value="parties" className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
             <Card>
-              <CardHeader><CardTitle className="text-base flex items-center gap-2"><Users className="h-4 w-4" /> Parties</CardTitle></CardHeader>
+              <CardHeader><CardTitle className="text-base flex items-center gap-2"><Users className="h-4 w-4" /> Our Parties (Clients)</CardTitle></CardHeader>
               <CardContent>
                 {caseData.caseClients?.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No parties linked</p>
@@ -183,7 +205,10 @@ export default function CaseDetailPage() {
                   <div className="space-y-2">
                     {caseData.caseClients?.map((cc: any) => (
                       <div key={cc.id} className="flex justify-between items-center p-2 border rounded">
-                        <Link href={`/clients/${cc.client.id}`} className="text-sm font-medium hover:underline">{cc.client.name}</Link>
+                        <div>
+                          <Link href={`/clients/${cc.client.id}`} className="text-sm font-medium hover:underline">{cc.client.name}</Link>
+                          {cc.client.phone && <p className="text-xs text-muted-foreground">{cc.client.phone}</p>}
+                        </div>
                         <Badge variant="outline">{cc.role}</Badge>
                       </div>
                     ))}
@@ -212,6 +237,9 @@ export default function CaseDetailPage() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Opposite Parties */}
+          <OppositePartiesSection caseId={params.id as string} parties={caseData.oppositeParties || []} onUpdate={fetchCase} />
         </TabsContent>
 
         <TabsContent value="events">
@@ -312,5 +340,252 @@ export default function CaseDetailPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+/* ===== Opposite Parties Section ===== */
+
+interface OppositeParty {
+  id: string;
+  name: string;
+  fatherHusbandName: string | null;
+  designation: string | null;
+  address: string | null;
+  city: string | null;
+  district: string | null;
+  state: string | null;
+  pincode: string | null;
+  phone: string | null;
+  email: string | null;
+  partyType: string;
+  advocateName: string | null;
+  advocatePhone: string | null;
+  notes: string | null;
+}
+
+function OppositePartiesSection({
+  caseId,
+  parties,
+  onUpdate,
+}: {
+  caseId: string;
+  parties: OppositeParty[];
+  onUpdate: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState({
+    name: "",
+    fatherHusbandName: "",
+    designation: "",
+    address: "",
+    city: "",
+    district: "",
+    state: "",
+    pincode: "",
+    phone: "",
+    email: "",
+    partyType: "RESPONDENT",
+    advocateName: "",
+    advocatePhone: "",
+    notes: "",
+  });
+
+  const updateField = (field: string, value: string) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const payload: Record<string, unknown> = { caseId, ...form };
+    for (const key of Object.keys(payload)) {
+      if (payload[key] === "") payload[key] = null;
+    }
+    payload.name = form.name; // name is required
+
+    const res = await fetch("/api/opposite-parties", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      toast.success("Opposite party added");
+      setOpen(false);
+      setForm({
+        name: "", fatherHusbandName: "", designation: "", address: "",
+        city: "", district: "", state: "", pincode: "", phone: "", email: "",
+        partyType: "RESPONDENT", advocateName: "", advocatePhone: "", notes: "",
+      });
+      onUpdate();
+    } else {
+      toast.error("Failed to add opposite party");
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!confirm(`Remove ${name} from opposite parties?`)) return;
+    const res = await fetch(`/api/opposite-parties/${id}`, { method: "DELETE" });
+    if (res.ok) {
+      toast.success("Opposite party removed");
+      onUpdate();
+    } else {
+      toast.error("Failed to remove");
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-base flex items-center gap-2">
+            <UserX className="h-4 w-4" /> Opposite Parties
+          </CardTitle>
+          <Dialog open={open} onOpenChange={setOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" variant="outline">
+                <Plus className="h-4 w-4 mr-1" /> Add Party
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Add Opposite Party</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleAdd} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Name *</Label>
+                    <Input value={form.name} onChange={(e) => updateField("name", e.target.value)} required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Party Type</Label>
+                    <Select value={form.partyType} onValueChange={(v) => updateField("partyType", v ?? "RESPONDENT")}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {PARTY_TYPES.map((t) => (
+                          <SelectItem key={t} value={t}>{t.replace(/_/g, " ")}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label>Relation</Label>
+                    <Select value={form.designation} onValueChange={(v) => updateField("designation", v ?? "")}>
+                      <SelectTrigger><SelectValue placeholder="S/o, D/o..." /></SelectTrigger>
+                      <SelectContent>
+                        {["S/o", "D/o", "W/o", "R/o"].map((d) => (
+                          <SelectItem key={d} value={d}>{d}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-2 space-y-2">
+                    <Label>Father / Husband Name</Label>
+                    <Input value={form.fatherHusbandName} onChange={(e) => updateField("fatherHusbandName", e.target.value)} />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Address</Label>
+                  <Textarea rows={2} value={form.address} onChange={(e) => updateField("address", e.target.value)} />
+                </div>
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label>City</Label>
+                    <Input value={form.city} onChange={(e) => updateField("city", e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>District</Label>
+                    <Input value={form.district} onChange={(e) => updateField("district", e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>State</Label>
+                    <Input value={form.state} onChange={(e) => updateField("state", e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Pincode</Label>
+                    <Input value={form.pincode} onChange={(e) => updateField("pincode", e.target.value)} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Phone</Label>
+                    <Input value={form.phone} onChange={(e) => updateField("phone", e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Email</Label>
+                    <Input type="email" value={form.email} onChange={(e) => updateField("email", e.target.value)} />
+                  </div>
+                </div>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pt-1">Their Advocate</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Advocate Name</Label>
+                    <Input value={form.advocateName} onChange={(e) => updateField("advocateName", e.target.value)} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Advocate Phone</Label>
+                    <Input value={form.advocatePhone} onChange={(e) => updateField("advocatePhone", e.target.value)} />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label>Notes</Label>
+                  <Textarea rows={2} value={form.notes} onChange={(e) => updateField("notes", e.target.value)} />
+                </div>
+                <Button type="submit" className="w-full">Add Opposite Party</Button>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {parties.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No opposite parties added</p>
+        ) : (
+          <div className="space-y-3">
+            {parties.map((party) => {
+              const addr = [party.address, party.city, party.district, party.state, party.pincode].filter(Boolean).join(", ");
+              return (
+                <div key={party.id} className="p-3 border rounded-md space-y-1">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium">{party.name}</p>
+                        <Badge variant="outline" className="text-xs">{party.partyType.replace(/_/g, " ")}</Badge>
+                      </div>
+                      {party.designation && party.fatherHusbandName && (
+                        <p className="text-xs text-muted-foreground">{party.designation} {party.fatherHusbandName}</p>
+                      )}
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={() => handleDelete(party.id, party.name)}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  {addr && (
+                    <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                      <MapPin className="h-3 w-3 mt-0.5 shrink-0" /> {addr}
+                    </div>
+                  )}
+                  {party.phone && (
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <Phone className="h-3 w-3" /> {party.phone}
+                    </div>
+                  )}
+                  {party.advocateName && (
+                    <p className="text-xs text-muted-foreground">
+                      Advocate: {party.advocateName} {party.advocatePhone ? `(${party.advocatePhone})` : ""}
+                    </p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }

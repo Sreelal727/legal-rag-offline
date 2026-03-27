@@ -45,14 +45,24 @@ export async function POST(request: NextRequest) {
 
   const organizationId = getOrgId(session!);
   const body = await request.json();
-  const { name, email, phone, address, clientType, panNumber, aadharNumber, gstNumber, notes } = body;
+  const {
+    name, fatherHusbandName, designation, email, phone, alternatePhone,
+    address, city, district, state, pincode, clientType, occupation, dob, age,
+    panNumber, aadharNumber, gstNumber, companyName, cinNumber, notes
+  } = body;
 
   if (!name) {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });
   }
 
   const client = await prisma.client.create({
-    data: { name, email, phone, address, clientType, panNumber, aadharNumber, gstNumber, notes, organizationId },
+    data: {
+      name, fatherHusbandName, designation, email, phone, alternatePhone,
+      address, city, district, state, pincode, clientType, occupation,
+      dob, age: age ? parseInt(age) : null,
+      panNumber, aadharNumber, gstNumber, companyName, cinNumber, notes,
+      organizationId,
+    },
   });
 
   await prisma.auditLog.create({

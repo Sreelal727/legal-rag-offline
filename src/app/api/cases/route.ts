@@ -48,7 +48,8 @@ export async function POST(request: NextRequest) {
   const organizationId = getOrgId(session!);
   const body = await request.json();
   const {
-    caseNumber, title, description, caseType, courtName, courtType, judge, filingDate, status, priority,
+    caseNumber, title, description, caseType, caseSubType, courtName, courtType, judge,
+    filingDate, status, stage, priority, suitValue, courtFee,
     clientName, clientEmail, clientPhone, clientAddress, clientType, clientRole,
   } = body;
 
@@ -100,12 +101,16 @@ export async function POST(request: NextRequest) {
       title,
       description,
       caseType: caseType || "CIVIL",
+      caseSubType: caseSubType || null,
       courtName,
       courtType: courtType || "DISTRICT_COURT",
       judge,
       filingDate: filingDate ? new Date(filingDate) : null,
       status: status || "ACTIVE",
+      stage: stage || null,
       priority: priority || "MEDIUM",
+      suitValue: suitValue ? parseFloat(suitValue) : null,
+      courtFee: courtFee ? parseFloat(courtFee) : null,
       organizationId,
     },
   });

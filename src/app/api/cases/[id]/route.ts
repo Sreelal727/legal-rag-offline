@@ -17,6 +17,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
       documents: { orderBy: { createdAt: "desc" } },
       diaryEntries: { orderBy: { date: "desc" } },
       notices: { orderBy: { createdAt: "desc" }, take: 5 },
+      oppositeParties: { orderBy: { createdAt: "asc" } },
     },
   });
 

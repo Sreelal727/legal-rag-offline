@@ -99,28 +99,40 @@ model PasswordResetToken {
 }
 
 model Client {
-  id             String       @id @default(uuid())
-  name           String
-  email          String?
-  phone          String?
-  address        String?
-  clientType     String       @default("INDIVIDUAL")
-  panNumber      String?
-  aadharNumber   String?
-  gstNumber      String?
-  notes          String?
-  isActive       Boolean      @default(true)
-  organizationId String
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  caseClients    CaseClient[]
-  notices        Notice[]
+  id                String       @id @default(uuid())
+  name              String
+  fatherHusbandName String?
+  designation       String?      // S/o, D/o, W/o, R/o
+  email             String?
+  phone             String?
+  alternatePhone    String?
+  address           String?
+  city              String?
+  district          String?
+  state             String?
+  pincode           String?
+  clientType        String       @default("INDIVIDUAL")
+  occupation        String?
+  dob               String?
+  age               Int?
+  panNumber         String?
+  aadharNumber      String?
+  gstNumber         String?
+  companyName       String?      // For company clients
+  cinNumber         String?      // Company Identification Number
+  notes             String?
+  isActive          Boolean      @default(true)
+  organizationId    String
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  organization      Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  caseClients       CaseClient[]
+  notices           Notice[]
   limitationTrackers LimitationTracker[]
-  timeEntries    TimeEntry[]
-  invoices       Invoice[]
+  timeEntries       TimeEntry[]
+  invoices          Invoice[]
   documentSubmissions DocumentSubmission[]
-  scrutinyReports ScrutinyReport[]
+  scrutinyReports   ScrutinyReport[]
 }
 
 model Case {
@@ -130,6 +142,7 @@ model Case {
   title           String
   description     String?
   caseType        String           @default("CIVIL")
+  caseSubType     String?          // PLAINT, RCP, GOP, SOP, SARFAESI, NI_ACT_138, CAVEAT, EP, APPEAL, REVISION, WRIT
   courtName       String?
   courtType       String           @default("DISTRICT_COURT")
   courtCode       String?
@@ -139,7 +152,10 @@ model Case {
   filingDate      DateTime?
   nextHearingDate DateTime?
   status          String           @default("ACTIVE")
+  stage           String?          // PRE_FILING, FILED, NOTICE, WRITTEN_STATEMENT, TRIAL, ARGUMENTS, JUDGMENT, EXECUTION
   priority        String           @default("MEDIUM")
+  suitValue       Float?
+  courtFee        Float?
   ecourtStatus    String?
   lastSyncedAt    DateTime?
   notes           String?
@@ -153,11 +169,34 @@ model Case {
   documents       Document[]
   diaryEntries    DiaryEntry[]
   notices         Notice[]
+  oppositeParties OppositeParty[]
   limitationTrackers LimitationTracker[]
   timeEntries     TimeEntry[]
   invoices        Invoice[]
   documentSubmissions DocumentSubmission[]
   scrutinyReports ScrutinyReport[]
+}
+
+model OppositeParty {
+  id                String   @id @default(uuid())
+  caseId            String
+  name              String
+  fatherHusbandName String?
+  designation       String?  // S/o, D/o, W/o
+  address           String?
+  city              String?
+  district          String?
+  state             String?
+  pincode           String?
+  phone             String?
+  email             String?
+  partyType         String   @default("RESPONDENT") // RESPONDENT, DEFENDANT, OPPOSITE_PARTY, ACCUSED
+  advocateName      String?
+  advocatePhone     String?
+  notes             String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  case              Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
 }
 
 model CaseClient {

@@ -36,16 +36,30 @@ const CLIENT_TYPE_COLORS: Record<string, string> = {
   OTHER: "bg-purple-500 text-white",
 };
 
+const DESIGNATIONS = ["S/o", "D/o", "W/o", "R/o"];
+
 interface Client {
   id: string;
   name: string;
+  fatherHusbandName: string | null;
+  designation: string | null;
   email: string | null;
   phone: string | null;
+  alternatePhone: string | null;
   address: string | null;
+  city: string | null;
+  district: string | null;
+  state: string | null;
+  pincode: string | null;
   clientType: string;
+  occupation: string | null;
+  dob: string | null;
+  age: number | null;
   panNumber: string | null;
   aadharNumber: string | null;
   gstNumber: string | null;
+  companyName: string | null;
+  cinNumber: string | null;
   notes: string | null;
   isActive: boolean;
   _count: { caseClients: number };
@@ -53,25 +67,49 @@ interface Client {
 
 interface FormState {
   name: string;
+  fatherHusbandName: string;
+  designation: string;
   clientType: string;
   email: string;
   phone: string;
+  alternatePhone: string;
   address: string;
+  city: string;
+  district: string;
+  state: string;
+  pincode: string;
+  occupation: string;
+  dob: string;
+  age: string;
   panNumber: string;
   aadharNumber: string;
   gstNumber: string;
+  companyName: string;
+  cinNumber: string;
   notes: string;
 }
 
 const emptyForm: FormState = {
   name: "",
+  fatherHusbandName: "",
+  designation: "",
   clientType: "INDIVIDUAL",
   email: "",
   phone: "",
+  alternatePhone: "",
   address: "",
+  city: "",
+  district: "",
+  state: "",
+  pincode: "",
+  occupation: "",
+  dob: "",
+  age: "",
   panNumber: "",
   aadharNumber: "",
   gstNumber: "",
+  companyName: "",
+  cinNumber: "",
   notes: "",
 };
 
@@ -442,6 +480,8 @@ export default function ClientsPage() {
               )}
 
               <form onSubmit={handleCreate} className="space-y-4">
+                {/* Section: Basic Info */}
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Basic Information</p>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Name *</Label>
@@ -471,16 +511,86 @@ export default function ClientsPage() {
                     </Select>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="designation">Relation</Label>
+                    <Select
+                      value={form.designation}
+                      onValueChange={(v) => updateField("designation", v ?? "")}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="S/o, D/o, W/o..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {DESIGNATIONS.map((d) => (
+                          <SelectItem key={d} value={d}>{d}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="col-span-2 space-y-2">
+                    <Label htmlFor="fatherHusbandName">Father / Husband Name</Label>
                     <Input
-                      id="email"
-                      type="email"
-                      value={form.email}
-                      onChange={(e) => updateField("email", e.target.value)}
+                      id="fatherHusbandName"
+                      value={form.fatherHusbandName}
+                      onChange={(e) => updateField("fatherHusbandName", e.target.value)}
                     />
                   </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="occupation">Occupation</Label>
+                    <Input
+                      id="occupation"
+                      value={form.occupation}
+                      onChange={(e) => updateField("occupation", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="dob">Date of Birth</Label>
+                    <Input
+                      id="dob"
+                      type="date"
+                      value={form.dob}
+                      onChange={(e) => updateField("dob", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="age">Age</Label>
+                    <Input
+                      id="age"
+                      type="number"
+                      value={form.age}
+                      onChange={(e) => updateField("age", e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Company fields — shown only for COMPANY type */}
+                {form.clientType === "COMPANY" && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="companyName">Company Name</Label>
+                      <Input
+                        id="companyName"
+                        value={form.companyName}
+                        onChange={(e) => updateField("companyName", e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="cinNumber">CIN Number</Label>
+                      <Input
+                        id="cinNumber"
+                        value={form.cinNumber}
+                        onChange={(e) => updateField("cinNumber", e.target.value)}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {/* Section: Contact */}
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pt-2">Contact Details</p>
+                <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="phone">Phone</Label>
                     <Input
@@ -489,9 +599,29 @@ export default function ClientsPage() {
                       onChange={(e) => updateField("phone", e.target.value)}
                     />
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="alternatePhone">Alternate Phone</Label>
+                    <Input
+                      id="alternatePhone"
+                      value={form.alternatePhone}
+                      onChange={(e) => updateField("alternatePhone", e.target.value)}
+                    />
+                  </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="address">Address</Label>
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={form.email}
+                    onChange={(e) => updateField("email", e.target.value)}
+                  />
+                </div>
+
+                {/* Section: Address */}
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pt-2">Address</p>
+                <div className="space-y-2">
+                  <Label htmlFor="address">Street Address</Label>
                   <Textarea
                     id="address"
                     rows={2}
@@ -499,6 +629,43 @@ export default function ClientsPage() {
                     onChange={(e) => updateField("address", e.target.value)}
                   />
                 </div>
+                <div className="grid grid-cols-4 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="city">City</Label>
+                    <Input
+                      id="city"
+                      value={form.city}
+                      onChange={(e) => updateField("city", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="district">District</Label>
+                    <Input
+                      id="district"
+                      value={form.district}
+                      onChange={(e) => updateField("district", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="state">State</Label>
+                    <Input
+                      id="state"
+                      value={form.state}
+                      onChange={(e) => updateField("state", e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="pincode">Pincode</Label>
+                    <Input
+                      id="pincode"
+                      value={form.pincode}
+                      onChange={(e) => updateField("pincode", e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Section: ID & Tax */}
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider pt-2">Identification</p>
                 <div className="grid grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="panNumber">PAN</Label>
@@ -525,6 +692,7 @@ export default function ClientsPage() {
                     />
                   </div>
                 </div>
+
                 <div className="space-y-2">
                   <Label htmlFor="notes">Notes</Label>
                   <Textarea
