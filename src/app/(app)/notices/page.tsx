@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { RoleGate } from "@/components/role-gate";
 import { format } from "date-fns";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 const statusColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   DRAFT: "secondary",
@@ -56,6 +57,7 @@ interface FormatSample {
 }
 
 export default function NoticesPage() {
+  const router = useRouter();
   const [notices, setNotices] = useState<NoticeItem[]>([]);
   const [templates, setTemplates] = useState<Template[]>([]);
   const [formatSamples, setFormatSamples] = useState<FormatSample[]>([]);
@@ -67,6 +69,9 @@ export default function NoticesPage() {
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
   const [draftContent, setDraftContent] = useState("");
   const [draftTitle, setDraftTitle] = useState("");
+  const [draftCaseId, setDraftCaseId] = useState("");
+  const [draftClientId, setDraftClientId] = useState("");
+  const [draftNoticeType, setDraftNoticeType] = useState("");
   const [generating, setGenerating] = useState(false);
   const [selectedNotice, setSelectedNotice] = useState<any>(null);
   const [viewOpen, setViewOpen] = useState(false);
@@ -137,6 +142,9 @@ export default function NoticesPage() {
         title: draftTitle,
         content: draftContent,
         templateId: selectedTemplate?.id,
+        caseId: draftCaseId || undefined,
+        clientId: draftClientId || undefined,
+        noticeType: draftNoticeType || undefined,
       }),
     });
 
@@ -147,17 +155,17 @@ export default function NoticesPage() {
       setSelectedFormatId("");
       setDraftContent("");
       setDraftTitle("");
+      setDraftCaseId("");
+      setDraftClientId("");
+      setDraftNoticeType("");
       fetchNotices();
     } else {
       toast.error("Failed to create notice");
     }
   };
 
-  const handleViewNotice = async (id: string) => {
-    const res = await fetch(`/api/notices/${id}`);
-    const data = await res.json();
-    setSelectedNotice(data);
-    setViewOpen(true);
+  const handleViewNotice = (id: string) => {
+    router.push(`/notices/${id}`);
   };
 
   const handleApproval = async (action: string) => {
@@ -228,6 +236,46 @@ export default function NoticesPage() {
                     </p>
                   </div>
                 )}
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-2">
+                    <Label>Notice Type</Label>
+                    <Select value={draftNoticeType} onValueChange={(v: any) => setDraftNoticeType(v === "none" ? "" : String(v || ""))}>
+                      <SelectTrigger><SelectValue placeholder="Type" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Not specified</SelectItem>
+                        <SelectItem value="LEGAL_NOTICE">Legal Notice</SelectItem>
+                        <SelectItem value="DEMAND_NOTICE">Demand Notice</SelectItem>
+                        <SelectItem value="EVICTION_NOTICE">Eviction Notice</SelectItem>
+                        <SelectItem value="RECOVERY_NOTICE">Recovery Notice</SelectItem>
+                        <SelectItem value="GENERAL">General</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Link to Case</Label>
+                    <Select value={draftCaseId} onValueChange={(v: any) => setDraftCaseId(v === "none" ? "" : String(v || ""))}>
+                      <SelectTrigger><SelectValue placeholder="Select case" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {cases.map((c: any) => (
+                          <SelectItem key={c.id} value={c.id}>{c.caseNumber} - {c.title}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Link to Client</Label>
+                    <Select value={draftClientId} onValueChange={(v: any) => setDraftClientId(v === "none" ? "" : String(v || ""))}>
+                      <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        {clients.map((c: any) => (
+                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="draftTitle">Title</Label>
                   <Input

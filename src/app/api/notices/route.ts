@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
   if (error) return error;
 
   const body = await request.json();
-  const { templateId, caseId, clientId, title, content } = body;
+  const { templateId, caseId, clientId, title, content, noticeType } = body;
 
   if (!title || !content) {
     return NextResponse.json({ error: "Title and content are required" }, { status: 400 });
@@ -44,6 +44,7 @@ export async function POST(request: NextRequest) {
       templateId: templateId || null,
       caseId: caseId || null,
       clientId: clientId || null,
+      noticeType: noticeType || null,
       title,
       content,
       draftedBy: session!.user.id,

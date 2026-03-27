@@ -197,6 +197,7 @@ model OppositeParty {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   case              Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  noticeRecipients  NoticeRecipient[]
 }
 
 model CaseClient {
@@ -358,7 +359,10 @@ model Notice {
   client         Client?          @relation(fields: [clientId], references: [id], onDelete: SetNull)
   drafter        User             @relation("NoticeDrafter", fields: [draftedBy], references: [id])
   approver       User?            @relation("NoticeApprover", fields: [approvedBy], references: [id])
+  noticeType     String?
   approvals      NoticeApproval[]
+  recipients     NoticeRecipient[]
+  replies        NoticeReply[]
 }
 
 model NoticeApproval {
@@ -592,4 +596,44 @@ model DeedChainNode {
   updatedAt          DateTime  @updatedAt
   scrutinyReport     ScrutinyReport   @relation(fields: [scrutinyReportId], references: [id], onDelete: Cascade)
   propertyDocument   PropertyDocument? @relation(fields: [propertyDocumentId], references: [id], onDelete: SetNull)
+}
+
+model NoticeRecipient {
+  id                String    @id @default(uuid())
+  noticeId          String
+  oppositePartyId   String?
+  recipientName     String
+  recipientAddress  String
+  recipientCity     String?
+  recipientState    String?
+  recipientPincode  String?
+  deliveryMethod    String    @default("REGISTERED_POST")
+  trackingNumber    String?
+  sentDate          DateTime?
+  deliveredDate     DateTime?
+  deliveryStatus    String    @default("PENDING")
+  adCardUrl         String?
+  receiptUrl        String?
+  returnReason      String?
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  notice            Notice         @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  oppositeParty     OppositeParty? @relation(fields: [oppositePartyId], references: [id], onDelete: SetNull)
+  replies           NoticeReply[]
+}
+
+model NoticeReply {
+  id            String    @id @default(uuid())
+  noticeId      String
+  recipientId   String?
+  replyDate     DateTime
+  replyContent  String?
+  documentPath  String?
+  documentName  String?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  notice        Notice          @relation(fields: [noticeId], references: [id], onDelete: Cascade)
+  recipient     NoticeRecipient? @relation(fields: [recipientId], references: [id], onDelete: SetNull)
 }

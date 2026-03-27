@@ -19,6 +19,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         include: { user: { select: { name: true, role: true } } },
         orderBy: { createdAt: "desc" },
       },
+      recipients: {
+        include: { oppositeParty: { select: { id: true, name: true, partyType: true } } },
+        orderBy: { createdAt: "asc" },
+      },
+      replies: {
+        include: { recipient: { select: { id: true, recipientName: true } } },
+        orderBy: { replyDate: "desc" },
+      },
     },
   });
 
