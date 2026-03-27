@@ -1660,5 +1660,266 @@ Date: {{date}}
   },
 ];
 
+// ─── Execution Petition Templates ────────────────────────────────────────────
+
+export const EP_TEMPLATES = [
+  {
+    name: "Execution Petition (EP)",
+    category: "EXECUTION",
+    documentType: "EP_MAIN",
+    description: "Execution Petition under Order XXI CPC",
+    variables: JSON.stringify([
+      "courtName", "csNumber", "year", "epNumber",
+      "decreeholderName", "decreeholderAddress",
+      "judgmentDebtorName", "judgmentDebtorAddress",
+      "decreeDate", "decreeAmount", "balanceDue",
+      "modeOfExecution", "advocateName", "date", "place",
+    ]),
+    content: `IN THE COURT OF {{courtName}}
+
+E.P. No. {{epNumber}} of {{year}}
+in
+C.S./O.S. No. {{csNumber}} of {{year}}
+
+{{decreeholderName}},
+Residing at {{decreeholderAddress}}.
+                                                    ... DECREE HOLDER
+
+        VERSUS
+
+{{judgmentDebtorName}},
+Residing at {{judgmentDebtorAddress}}.
+                                                    ... JUDGMENT DEBTOR
+
+EXECUTION PETITION
+(Under Order XXI of the Code of Civil Procedure, 1908)
+
+The decree holder above named respectfully submits as follows:
+
+1. That this Hon'ble Court passed a decree in C.S./O.S. No. {{csNumber}} of {{year}} dated {{decreeDate}} in favour of the petitioner/decree holder.
+
+2. That the total decree amount is Rs. {{decreeAmount}}/- and the balance due as on date is Rs. {{balanceDue}}/-.
+
+3. That the judgment debtor has not complied with the decree passed by this Hon'ble Court.
+
+4. MODE OF EXECUTION SOUGHT:
+{{modeOfExecution}}
+
+5. DETAILS OF JUDGMENT DEBTOR'S PROPERTY (if applicable):
+[Property description / movables / bank accounts]
+
+6. That no previous execution petition is pending against the judgment debtor.
+
+PRAYER:
+It is most respectfully prayed that this Hon'ble Court be pleased to:
+
+a) Execute the decree by {{modeOfExecution}};
+b) Issue necessary warrants/notices;
+c) Recover the balance decree amount of Rs. {{balanceDue}}/- from the judgment debtor;
+d) Award costs of the execution petition.
+
+Place: {{place}}
+Date: {{date}}
+
+                                        DECREE HOLDER
+                                        Through Advocate
+                                        {{advocateName}}`,
+  },
+  {
+    name: "EP - Batta Application",
+    category: "EXECUTION",
+    documentType: "EP_BATTA",
+    description: "Batta/Process fee application in Execution Petition",
+    variables: JSON.stringify([
+      "courtName", "epNumber", "csNumber", "year",
+      "decreeholderName", "judgmentDebtorName",
+      "bathaAmount", "purpose", "advocateName", "date", "place",
+    ]),
+    content: `IN THE COURT OF {{courtName}}
+
+E.P. No. {{epNumber}} of {{year}}
+in C.S./O.S. No. {{csNumber}} of {{year}}
+
+{{decreeholderName}}                            ... DECREE HOLDER
+        VERSUS
+{{judgmentDebtorName}}                          ... JUDGMENT DEBTOR
+
+APPLICATION FOR BATTA
+
+To,
+The Hon'ble Court,
+
+The decree holder respectfully submits:
+
+1. That the E.P. is pending before this Hon'ble Court.
+
+2. Batta of Rs. {{bathaAmount}}/- is required for the following purpose:
+{{purpose}}
+
+PRAYER:
+Issue batta of Rs. {{bathaAmount}}/- for {{purpose}}.
+
+Place: {{place}}
+Date: {{date}}
+
+                                        DECREE HOLDER
+                                        Through Advocate
+                                        {{advocateName}}`,
+  },
+  {
+    name: "EP - Notice Application",
+    category: "EXECUTION",
+    documentType: "EP_NOTICE",
+    description: "Application for notice to judgment debtor in EP",
+    variables: JSON.stringify([
+      "courtName", "epNumber", "csNumber", "year",
+      "decreeholderName", "judgmentDebtorName", "judgmentDebtorAddress",
+      "decreeAmount", "balanceDue", "advocateName", "date", "place",
+    ]),
+    content: `IN THE COURT OF {{courtName}}
+
+E.P. No. {{epNumber}} of {{year}}
+in C.S./O.S. No. {{csNumber}} of {{year}}
+
+{{decreeholderName}}                            ... DECREE HOLDER
+        VERSUS
+{{judgmentDebtorName}}                          ... JUDGMENT DEBTOR
+
+APPLICATION FOR NOTICE TO JUDGMENT DEBTOR
+
+The decree holder respectfully prays:
+
+Issue notice to the judgment debtor — {{judgmentDebtorName}}, {{judgmentDebtorAddress}} — directing them to pay the balance decree amount of Rs. {{balanceDue}}/- within [time] days, failing which appropriate execution steps will follow.
+
+Place: {{place}}
+Date: {{date}}
+
+                                        DECREE HOLDER
+                                        Through Advocate
+                                        {{advocateName}}`,
+  },
+  {
+    name: "EP - Arrest Application (Section 51 CPC)",
+    category: "EXECUTION",
+    documentType: "EP_ARREST",
+    description: "Application for arrest of judgment debtor under Section 51 CPC",
+    variables: JSON.stringify([
+      "courtName", "epNumber", "csNumber", "year",
+      "decreeholderName", "judgmentDebtorName", "judgmentDebtorAddress",
+      "decreeAmount", "balanceDue", "grounds", "advocateName", "date", "place",
+    ]),
+    content: `IN THE COURT OF {{courtName}}
+
+E.P. No. {{epNumber}} of {{year}}
+in C.S./O.S. No. {{csNumber}} of {{year}}
+
+{{decreeholderName}}                            ... DECREE HOLDER
+        VERSUS
+{{judgmentDebtorName}}                          ... JUDGMENT DEBTOR
+
+APPLICATION FOR ARREST AND DETENTION OF JUDGMENT DEBTOR
+(Under Section 51 and Order XXI Rule 37 of CPC)
+
+1. That the decree dated [date] is for Rs. {{decreeAmount}}/- and balance due is Rs. {{balanceDue}}/-.
+
+2. GROUNDS FOR ARREST:
+{{grounds}}
+
+3. That the judgment debtor has means to pay but has dishonestly or fraudulently refused to pay.
+
+PRAYER:
+Issue warrant of arrest against the judgment debtor and commit them to civil prison until the decree is satisfied.
+
+Place: {{place}}
+Date: {{date}}
+
+                                        DECREE HOLDER
+                                        Through Advocate
+                                        {{advocateName}}`,
+  },
+  {
+    name: "EP - Attachment of Property",
+    category: "EXECUTION",
+    documentType: "EP_ATTACHMENT",
+    description: "Application for attachment of judgment debtor's property in EP",
+    variables: JSON.stringify([
+      "courtName", "epNumber", "csNumber", "year",
+      "decreeholderName", "judgmentDebtorName",
+      "decreeAmount", "balanceDue",
+      "propertyDescription", "advocateName", "date", "place",
+    ]),
+    content: `IN THE COURT OF {{courtName}}
+
+E.P. No. {{epNumber}} of {{year}}
+in C.S./O.S. No. {{csNumber}} of {{year}}
+
+{{decreeholderName}}                            ... DECREE HOLDER
+        VERSUS
+{{judgmentDebtorName}}                          ... JUDGMENT DEBTOR
+
+APPLICATION FOR ATTACHMENT OF PROPERTY
+(Under Order XXI Rule 54 of CPC)
+
+1. Balance decree amount: Rs. {{balanceDue}}/-.
+
+2. PROPERTY TO BE ATTACHED (SCHEDULE):
+{{propertyDescription}}
+
+3. The above property belongs to the judgment debtor and is not exempt from attachment.
+
+PRAYER:
+Attach the schedule property and proceed with sale to satisfy the decree.
+
+Place: {{place}}
+Date: {{date}}
+
+                                        DECREE HOLDER
+                                        Through Advocate
+                                        {{advocateName}}`,
+  },
+  {
+    name: "EP - Sale of Attached Property",
+    category: "EXECUTION",
+    documentType: "EP_SALE",
+    description: "Application for sale of attached property in EP",
+    variables: JSON.stringify([
+      "courtName", "epNumber", "csNumber", "year",
+      "decreeholderName", "judgmentDebtorName",
+      "propertyDescription", "attachmentOrderDate",
+      "balanceDue", "advocateName", "date", "place",
+    ]),
+    content: `IN THE COURT OF {{courtName}}
+
+E.P. No. {{epNumber}} of {{year}}
+in C.S./O.S. No. {{csNumber}} of {{year}}
+
+{{decreeholderName}}                            ... DECREE HOLDER
+        VERSUS
+{{judgmentDebtorName}}                          ... JUDGMENT DEBTOR
+
+APPLICATION FOR SALE OF ATTACHED PROPERTY
+(Under Order XXI Rule 64 of CPC)
+
+1. That this Hon'ble Court attached the property described below vide order dated {{attachmentOrderDate}}.
+
+2. That the balance decree amount of Rs. {{balanceDue}}/- remains unpaid.
+
+3. PROPERTY ATTACHED (SCHEDULE):
+{{propertyDescription}}
+
+4. That the statutory period for challenging attachment has elapsed.
+
+PRAYER:
+Bring the attached property to sale by public auction to satisfy the decree amount of Rs. {{balanceDue}}/-.
+
+Place: {{place}}
+Date: {{date}}
+
+                                        DECREE HOLDER
+                                        Through Advocate
+                                        {{advocateName}}`,
+  },
+];
+
 // Combined export of all templates for seeding
-export const ALL_TEMPLATES = [...COURT_TEMPLATES, ...IA_TEMPLATES];
+export const ALL_TEMPLATES = [...COURT_TEMPLATES, ...IA_TEMPLATES, ...EP_TEMPLATES];
