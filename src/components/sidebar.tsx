@@ -47,6 +47,7 @@ const navItems = [
   { href: "/format-library", label: "Format Library", icon: FileText, permission: "notices:read" as Permission },
   { href: "/billing", label: "Billing", icon: Receipt, permission: "billing:read" as Permission },
   { href: "/bank-opinion", label: "Bank Opinion", icon: Building2, permission: "cases:read" as Permission },
+  { href: "/defence", label: "AI Defence", icon: Shield, permission: "chat:use" as Permission },
   { href: "/chat", label: "AI Chat", icon: MessageSquare, permission: "chat:use" as Permission },
   { href: "/users", label: "Users", icon: UserCog, permission: "users:read" as Permission },
   { href: "/settings", label: "Settings", icon: Settings, permission: "settings:read" as Permission },
