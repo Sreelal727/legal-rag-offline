@@ -45,6 +45,8 @@ model Organization {
   documentSubmissions DocumentSubmission[]
   passwordResetTokens PasswordResetToken[]
   scrutinyReports    ScrutinyReport[]
+  caseDocuments      CaseDocument[]
+  caseTemplates      CaseTemplate[]
 }
 
 model User {
@@ -75,6 +77,7 @@ model User {
   createdSubmissions  DocumentSubmission[] @relation("CreatedSubmissions")
   passwordResetTokens PasswordResetToken[]
   scrutinyReports    ScrutinyReport[]
+  caseDocuments      CaseDocument[]
 }
 
 model Session {
@@ -175,6 +178,7 @@ model Case {
   invoices        Invoice[]
   documentSubmissions DocumentSubmission[]
   scrutinyReports ScrutinyReport[]
+  caseDocuments   CaseDocument[]
 }
 
 model OppositeParty {
@@ -636,4 +640,45 @@ model NoticeReply {
   updatedAt     DateTime  @updatedAt
   notice        Notice          @relation(fields: [noticeId], references: [id], onDelete: Cascade)
   recipient     NoticeRecipient? @relation(fields: [recipientId], references: [id], onDelete: SetNull)
+}
+
+model CaseTemplate {
+  id              String   @id @default(uuid())
+  name            String
+  category        String
+  documentType    String
+  description     String?
+  content         String
+  variables       String?
+  courtType       String?
+  isActive        Boolean  @default(true)
+  organizationId  String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  caseDocuments   CaseDocument[]
+}
+
+model CaseDocument {
+  id              String    @id @default(uuid())
+  caseId          String
+  documentType    String
+  title           String
+  content         String
+  templateId      String?
+  status          String    @default("DRAFT")
+  filedDate       DateTime?
+  filingNumber    String?
+  courtName       String?
+  notes           String?
+  generatedBy     String
+  organizationId  String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  case            Case          @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  template        CaseTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator         User          @relation(fields: [generatedBy], references: [id])
 }

@@ -22,6 +22,7 @@ import {
   Receipt,
   FileCheck,
   SearchCheck,
+  Stamp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { hasPermission, type Role, type Permission } from "@/lib/permissions";
@@ -32,6 +33,7 @@ const navItems = [
   { href: "/cases", label: "Cases", icon: Briefcase, permission: "cases:read" as Permission },
   { href: "/ecourts", label: "eCourts/DCMS", icon: Scale, permission: "cases:read" as Permission },
   { href: "/submissions", label: "Doc Submissions", icon: FileCheck, permission: "cases:read" as Permission },
+  { href: "/case-filing", label: "Case Filing", icon: Stamp, permission: "cases:read" as Permission },
   { href: "/documents", label: "Documents", icon: FileText, permission: "documents:read" as Permission },
   { href: "/scrutiny", label: "Scrutiny Reports", icon: SearchCheck, permission: "scrutiny:read" as Permission },
   { href: "/diary", label: "Court Diary", icon: BookOpen, permission: "diary:read" as Permission },
