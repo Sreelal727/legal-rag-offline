@@ -73,15 +73,17 @@ Open [http://localhost:3000](http://localhost:3000).
 
 ### Default login
 
-| Role | Email | Password |
-|------|-------|----------|
-| Admin | admin@legalrag.com | admin123 |
-| Senior Advocate | senior@legalrag.com | senior123 |
-| Junior Advocate | junior@legalrag.com | junior123 |
-| Clerk | clerk@legalrag.com | clerk123 |
-| Intern | intern@legalrag.com | intern123 |
+After seeding, all users share the password set via `SEED_PASSWORD` env var (default: `changeme123`).
 
-> Change these passwords after first login in a production environment.
+| Role | Email |
+|------|-------|
+| Admin | admin@legalrag.com |
+| Senior Advocate | senior@legalrag.com |
+| Junior Advocate | junior@legalrag.com |
+| Clerk | clerk@legalrag.com |
+| Intern | intern@legalrag.com |
+
+> **Important:** Change all passwords immediately after first login.
 
 ## Setting up Turso Database
 

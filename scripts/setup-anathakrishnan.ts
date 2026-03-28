@@ -502,7 +502,7 @@ async function main() {
       slug: "gouriankar-associates",
       address: "Lakshmi Sadan, H.P.O College Road, Palakkad - 678 001",
       phone: "0491-2544549",
-      email: "pgtgak@gmail.com",
+      email: process.env.ORG_EMAIL || "office@gouriankar.com",
       plan: "PROFESSIONAL",
       maxUsers: 25,
       maxCases: 500,
@@ -513,7 +513,8 @@ async function main() {
   console.log(`Organization: ${org.name} (${org.id})`);
 
   // --- Users ---
-  const adminPassword = await bcrypt.hash("gak2024", 12);
+  const rawPassword = process.env.SETUP_PASSWORD || "changeme123";
+  const adminPassword = await bcrypt.hash(rawPassword, 12);
 
   const ananthakrishnan = await prisma.user.upsert({
     where: { email: "anathakrishnan@legalrag.com" },
@@ -622,16 +623,16 @@ async function main() {
   console.log(`  Slug          : gouriankar-associates`);
   console.log(`  Address       : Lakshmi Sadan, H.P.O College Road, Palakkad - 678 001`);
   console.log(`  Phone         : 0491-2544549`);
-  console.log(`  Email         : pgtgak@gmail.com`);
+  console.log(`  Email         : ${process.env.ORG_EMAIL || "office@gouriankar.com"}`);
   console.log("--------------------------------------------------------");
   console.log(`  User 1        : G. Ananthakrishnan`);
   console.log(`    Email       : anathakrishnan@legalrag.com`);
-  console.log(`    Password    : gak2024`);
+  console.log(`    Password    : ${rawPassword}`);
   console.log(`    Role        : SENIOR_ADVOCATE`);
   console.log("--------------------------------------------------------");
   console.log(`  User 2        : A. Gourisankar`);
   console.log(`    Email       : gourisankar@legalrag.com`);
-  console.log(`    Password    : gak2024`);
+  console.log(`    Password    : ${rawPassword}`);
   console.log(`    Role        : SENIOR_ADVOCATE`);
   console.log("--------------------------------------------------------");
   console.log(`  Templates     : ${caseTemplatesCreated} standard + ${customCreated} custom case + ${noticeTemplatesCreated} notice`);

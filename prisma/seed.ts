@@ -15,7 +15,8 @@ async function main() {
 
   const adapter = new PrismaBetterSqlite3({ url: dbPath });
   const prisma = new PrismaClient({ adapter } as any);
-  const hashedPassword = await bcrypt.hash("admin123", 12);
+  const seedPassword = process.env.SEED_PASSWORD || "changeme123";
+  const hashedPassword = await bcrypt.hash(seedPassword, 12);
 
   // Create default organization
   const org = await prisma.organization.upsert({
@@ -57,7 +58,7 @@ async function main() {
     update: {},
     create: {
       email: "senior@legalrag.com",
-      password: await bcrypt.hash("senior123", 12),
+      password: await bcrypt.hash(seedPassword, 12),
       name: "Adv. Rajesh Kumar",
       role: "SENIOR_ADVOCATE",
       phone: "+91-9876543210",
@@ -72,7 +73,7 @@ async function main() {
     update: {},
     create: {
       email: "junior@legalrag.com",
-      password: await bcrypt.hash("junior123", 12),
+      password: await bcrypt.hash(seedPassword, 12),
       name: "Adv. Priya Sharma",
       role: "JUNIOR_ADVOCATE",
       phone: "+91-9876543211",
@@ -87,7 +88,7 @@ async function main() {
     update: {},
     create: {
       email: "clerk@legalrag.com",
-      password: await bcrypt.hash("clerk123", 12),
+      password: await bcrypt.hash(seedPassword, 12),
       name: "Ramesh Patel",
       role: "CLERK",
       phone: "+91-9876543212",
@@ -101,7 +102,7 @@ async function main() {
     update: {},
     create: {
       email: "intern@legalrag.com",
-      password: await bcrypt.hash("intern123", 12),
+      password: await bcrypt.hash(seedPassword, 12),
       name: "Ananya Singh",
       role: "INTERN",
       phone: "+91-9876543213",
@@ -430,11 +431,13 @@ Advocate
   });
 
   console.log("Seed completed successfully!");
-  console.log("Admin login: admin@legalrag.com / admin123");
-  console.log("Senior Advocate: senior@legalrag.com / senior123");
-  console.log("Junior Advocate: junior@legalrag.com / junior123");
-  console.log("Clerk: clerk@legalrag.com / clerk123");
-  console.log("Intern: intern@legalrag.com / intern123");
+  console.log(`All users seeded with password: ${seedPassword}`);
+  console.log("Admin: admin@legalrag.com");
+  console.log("Senior Advocate: senior@legalrag.com");
+  console.log("Junior Advocate: junior@legalrag.com");
+  console.log("Clerk: clerk@legalrag.com");
+  console.log("Intern: intern@legalrag.com");
+  console.log("Set SEED_PASSWORD env var to customize the password.");
 }
 
 main()

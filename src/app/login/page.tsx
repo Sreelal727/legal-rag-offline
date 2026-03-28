@@ -81,7 +81,7 @@ export default function LoginPage() {
           </form>
           {process.env.NODE_ENV === "development" && (
             <div className="mt-6 text-xs text-muted-foreground text-center space-y-1">
-              <p>Demo: admin@legalrag.com / admin123</p>
+              <p>Demo: admin@legalrag.com</p>
             </div>
           )}
         </CardContent>
