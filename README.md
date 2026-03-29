@@ -7,28 +7,30 @@ AI-powered legal practice management system built for Indian law firms. Manage c
 - **Case Management** — Track cases, hearings, court dates, and assignments
 - **Client Management** — Individual and company clients with GST/Aadhar support
 - **AI Chat** — Draft legal notices, petitions, and get legal research assistance
+- **AI Defence Drafting** — Generate structured written statements and defence documents
 - **Document Management** — Upload, extract, and search legal documents (PDF, DOCX, DOC)
+- **Template System** — Org-scoped case and notice templates with `{{variable}}` placeholders
 - **Format Library** — Store and reuse legal document templates with AI-powered format matching
 - **Court Diary** — Daily cause list and hearing tracker
 - **Billing & Invoicing** — Time entries, invoices with GST support
 - **Limitation Tracker** — Deadline management for statute of limitations
 - **Notices** — Draft, review, and approve legal notices with templates
+- **Execution Petitions** — EP filing, affidavits, and attachment workflows
 - **Audit Log** — Complete activity trail for compliance
-- **Role-based Access** — Admin, Senior Advocate, Junior Advocate, Clerk, Intern
+- **Multi-tenant** — Isolated organizations with role-based access (ADMIN, SENIOR_ADVOCATE, JUNIOR_ADVOCATE, CLERK, INTERN)
 
 ## Quick Start
 
 ### Prerequisites
 
 - **Node.js** 18+ ([download](https://nodejs.org))
-- **Turso account** (free) — [turso.tech](https://turso.tech)
-- **HuggingFace API key** (free) — [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
+- **Ollama** (for local AI) — [ollama.com](https://ollama.com)
 
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/Sreelal727/legal-rag.git
-cd legal-rag
+git clone https://github.com/Sreelal727/legal-rag-offline.git
+cd legal-rag-offline
 npm install
 ```
 
@@ -38,30 +40,28 @@ npm install
 cp .env.example .env.local
 ```
 
-Edit `.env.local` and fill in your values:
+Edit `.env.local`:
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `TURSO_DATABASE_URL` | Yes | Your Turso database URL |
-| `TURSO_AUTH_TOKEN` | Yes | Your Turso auth token |
+| `DATABASE_PATH` | Yes | SQLite database path (e.g. `./data/legal-rag.db`) |
+| `DATABASE_URL` | Yes | Prisma URL (e.g. `file:./data/legal-rag.db`) |
 | `NEXTAUTH_SECRET` | Yes | Random secret (`openssl rand -base64 32`) |
 | `NEXTAUTH_URL` | Yes | Your app URL (e.g. `http://localhost:3000`) |
-| `LLM_API_KEY` | Yes | HuggingFace or OpenAI-compatible API key |
-| `LLM_BASE_URL` | Yes | LLM endpoint URL |
-| `LLM_MODEL` | Yes | Model name |
-| `INDIAN_KANOON_TOKEN` | No | For case law search ([indiankanoon.org](https://api.indiankanoon.org)) |
-| `CHROMA_PATH` | No | ChromaDB path for RAG vector search |
+| `LLM_API_KEY` | Yes | `ollama` for local, or OpenRouter/HuggingFace key |
+| `LLM_BASE_URL` | Yes | `http://localhost:11434/v1` for Ollama |
+| `LLM_MODEL` | Yes | Model name (e.g. `qwen3:8b`) |
+| `SEED_PASSWORD` | No | Password for seeded admin user (default: `changeme123`) |
+| `ADMIN_EMAIL` | No | Admin email (default: `admin@legalrag.com`) |
+| `ORG_NAME` | No | Organization name for initial setup |
 
-### 3. Set up database and seed data
+### 3. Set up database
 
 ```bash
 npm run setup
 ```
 
-This runs `prisma generate` + `prisma db push` + seeds the database with:
-- Admin account and demo users
-- Notice templates (Section 80 CPC, Cheque Bounce, Eviction, etc.)
-- Sample clients and cases
+This creates the database schema, an admin account, and generic notice templates.
 
 ### 4. Start the server
 
@@ -69,74 +69,62 @@ This runs `prisma generate` + `prisma db push` + seeds the database with:
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000) and log in with the admin credentials configured in step 2.
 
-### Default login
+> **Important:** Change the default password immediately after first login.
 
-After seeding, all users share the password set via `SEED_PASSWORD` env var (default: `changeme123`).
+## Client Onboarding
 
-| Role | Email |
-|------|-------|
-| Admin | admin@legalrag.com |
-| Senior Advocate | senior@legalrag.com |
-| Junior Advocate | junior@legalrag.com |
-| Clerk | clerk@legalrag.com |
-| Intern | intern@legalrag.com |
+To onboard a new law firm:
 
-> **Important:** Change all passwords immediately after first login.
+```bash
+# Generic setup (interactive)
+npx tsx scripts/setup-org.ts \
+  --name "Firm Name" \
+  --slug "firm-slug" \
+  --email "admin@firm.com" \
+  --password "securepassword" \
+  --address "Firm Address"
 
-## Setting up Turso Database
+# Or use the onboarding API (requires admin auth)
+POST /api/admin/onboard
+```
 
-1. Install the Turso CLI:
-   ```bash
-   curl -sSfL https://get.tur.so/install.sh | bash
-   ```
+### Migrating from legacy systems
 
-2. Sign up and create a database:
-   ```bash
-   turso auth signup
-   turso db create legal-rag
-   ```
+If the client has an MS Access database (AdvosCD.mdb or similar):
 
-3. Get your credentials:
-   ```bash
-   turso db show legal-rag --url     # → TURSO_DATABASE_URL
-   turso db tokens create legal-rag   # → TURSO_AUTH_TOKEN
-   ```
+```bash
+# First run the org setup script, then:
+npx tsx scripts/migrate-access-db.ts \
+  --mdb "/path/to/AdvosCD.mdb" \
+  --org-slug "firm-slug"
+```
 
-## Optional: ChromaDB for RAG
+This migrates clients, cases, execution petitions, court diary, and party relationships.
 
-ChromaDB enables semantic search on uploaded documents and format library templates. The app works without it — RAG features are simply disabled.
+## Architecture
 
-To enable:
-1. Install ChromaDB: `pip install chromadb`
-2. Start the server: `chroma run --path ./chroma-data`
-3. Set `CHROMA_PATH=./chroma-data` in `.env.local`
-
-## Tech Stack
-
-- **Framework**: Next.js 16 (App Router, Turbopack)
-- **Database**: Turso (LibSQL) via Prisma ORM
-- **Auth**: NextAuth.js (Credentials provider, JWT)
-- **AI**: OpenAI-compatible API (HuggingFace, Groq, etc.)
+- **Framework**: Next.js 16 (App Router)
+- **Database**: SQLite (local) via Prisma ORM + better-sqlite3
+- **Auth**: NextAuth.js (Credentials provider, JWT, bcrypt)
+- **AI**: Ollama (local) or OpenRouter/HuggingFace (cloud)
 - **UI**: Tailwind CSS, shadcn/ui
-- **Vector Search**: ChromaDB (optional)
+- **Multi-tenant**: Organization-scoped data with `organizationId` on all models
+- **Vector Search**: ChromaDB (optional, for RAG document search)
 
 ## Deployment
 
-### Vercel (recommended)
-
-1. Push to GitHub
-2. Import in [Vercel](https://vercel.com)
-3. Add all environment variables from `.env.example`
-4. Deploy
-
-### Self-hosted
+### Local (recommended for law firms)
 
 ```bash
 npm run build
 npm start
 ```
+
+### Cloud (optional)
+
+Supports Turso (cloud SQLite) migration via `prisma/migrate-turso.ts`.
 
 ## License
 

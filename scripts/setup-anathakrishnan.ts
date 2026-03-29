@@ -518,12 +518,12 @@ async function main() {
 
   const ananthakrishnan = await prisma.user.upsert({
     where: { email: "anathakrishnan@legalrag.com" },
-    update: {},
+    update: { role: "ADMIN", organizationId: org.id },
     create: {
       email: "anathakrishnan@legalrag.com",
       password: adminPassword,
       name: "G. Ananthakrishnan",
-      role: "SENIOR_ADVOCATE",
+      role: "ADMIN",
       phone: "0491-2544549",
       organizationId: org.id,
     },
@@ -628,7 +628,7 @@ async function main() {
   console.log(`  User 1        : G. Ananthakrishnan`);
   console.log(`    Email       : anathakrishnan@legalrag.com`);
   console.log(`    Password    : ${rawPassword}`);
-  console.log(`    Role        : SENIOR_ADVOCATE`);
+  console.log(`    Role        : ADMIN`);
   console.log("--------------------------------------------------------");
   console.log(`  User 2        : A. Gourisankar`);
   console.log(`    Email       : gourisankar@legalrag.com`);

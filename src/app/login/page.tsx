@@ -60,7 +60,7 @@ export default function LoginPage() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@legalrag.com"
+                placeholder="your-email@firm.com"
                 required
               />
             </div>
@@ -79,11 +79,7 @@ export default function LoginPage() {
               {loading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
-          {process.env.NODE_ENV === "development" && (
-            <div className="mt-6 text-xs text-muted-foreground text-center space-y-1">
-              <p>Demo: admin@legalrag.com</p>
-            </div>
-          )}
+          {/* Login credentials are set during organization setup */}
         </CardContent>
       </Card>
     </div>

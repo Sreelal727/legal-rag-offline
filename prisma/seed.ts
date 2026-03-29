@@ -1,7 +1,22 @@
+/**
+ * Database Seed Script — Clean Product Setup
+ *
+ * Creates a single admin user and seeds generic notice templates.
+ * All values come from environment variables — no hardcoded client data.
+ *
+ * Required env vars:
+ *   ADMIN_EMAIL    — Admin login email    (default: admin@legalrag.com)
+ *   ADMIN_NAME     — Admin display name   (default: System Admin)
+ *   SEED_PASSWORD  — Password for seeded users (default: changeme123)
+ *
+ * Usage:
+ *   npm run db:seed
+ *   SEED_PASSWORD=strongpass ADMIN_EMAIL=me@firm.com npm run db:seed
+ */
+
 import dotenv from "dotenv";
 import path from "path";
 
-// Load .env.local first (Next.js convention), fall back to .env
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
@@ -9,114 +24,17 @@ import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
 import bcrypt from "bcryptjs";
 
-async function main() {
-  const dbPath = process.env.DATABASE_PATH || "./data/legal-rag.db";
-  console.log("Connecting to local SQLite:", dbPath);
+// ---------------------------------------------------------------------------
+// Generic notice templates — these are standard Indian legal formats,
+// not client-specific. They use {{variable}} placeholders.
+// ---------------------------------------------------------------------------
 
-  const adapter = new PrismaBetterSqlite3({ url: dbPath });
-  const prisma = new PrismaClient({ adapter } as any);
-  const seedPassword = process.env.SEED_PASSWORD || "changeme123";
-  const hashedPassword = await bcrypt.hash(seedPassword, 12);
-
-  // Create default organization
-  const org = await prisma.organization.upsert({
-    where: { id: "default-org" },
-    update: {},
-    create: {
-      id: "default-org",
-      name: "Kumar & Associates",
-      slug: "kumar-associates",
-      address: "123, Law Chambers, High Court Road, Mumbai - 400001",
-      phone: "+91-22-23456789",
-      email: "office@kumarassociates.com",
-      gstin: "27AABCK1234A1Z5",
-      plan: "PROFESSIONAL",
-      maxUsers: 25,
-      maxCases: 500,
-      maxDocuments: 5000,
-      maxAiQueries: 1000,
-    },
-  });
-
-  // Create admin user
-  const admin = await prisma.user.upsert({
-    where: { email: "admin@legalrag.com" },
-    update: {},
-    create: {
-      email: "admin@legalrag.com",
-      password: hashedPassword,
-      name: "System Admin",
-      role: "ADMIN",
-      phone: "+91-9999999999",
-      organizationId: org.id,
-    },
-  });
-
-  // Create demo senior advocate
-  const senior = await prisma.user.upsert({
-    where: { email: "senior@legalrag.com" },
-    update: {},
-    create: {
-      email: "senior@legalrag.com",
-      password: await bcrypt.hash(seedPassword, 12),
-      name: "Adv. Rajesh Kumar",
-      role: "SENIOR_ADVOCATE",
-      phone: "+91-9876543210",
-      barCouncilNumber: "MAH/1234/2005",
-      organizationId: org.id,
-    },
-  });
-
-  // Create demo junior advocate
-  await prisma.user.upsert({
-    where: { email: "junior@legalrag.com" },
-    update: {},
-    create: {
-      email: "junior@legalrag.com",
-      password: await bcrypt.hash(seedPassword, 12),
-      name: "Adv. Priya Sharma",
-      role: "JUNIOR_ADVOCATE",
-      phone: "+91-9876543211",
-      barCouncilNumber: "DEL/5678/2018",
-      organizationId: org.id,
-    },
-  });
-
-  // Create clerk
-  await prisma.user.upsert({
-    where: { email: "clerk@legalrag.com" },
-    update: {},
-    create: {
-      email: "clerk@legalrag.com",
-      password: await bcrypt.hash(seedPassword, 12),
-      name: "Ramesh Patel",
-      role: "CLERK",
-      phone: "+91-9876543212",
-      organizationId: org.id,
-    },
-  });
-
-  // Create intern
-  await prisma.user.upsert({
-    where: { email: "intern@legalrag.com" },
-    update: {},
-    create: {
-      email: "intern@legalrag.com",
-      password: await bcrypt.hash(seedPassword, 12),
-      name: "Ananya Singh",
-      role: "INTERN",
-      phone: "+91-9876543213",
-      organizationId: org.id,
-    },
-  });
-
-  // Notice templates
-  const templates = [
-    {
-      name: "Legal Notice under Section 80 CPC",
-      description: "Mandatory pre-suit notice before filing suit against Government/Public Officer",
-      category: "CPC",
-      content: `LEGAL NOTICE UNDER SECTION 80 OF THE CODE OF CIVIL PROCEDURE, 1908
+const NOTICE_TEMPLATES = [
+  {
+    name: "Legal Notice under Section 80 CPC",
+    description: "Mandatory pre-suit notice before filing suit against Government/Public Officer",
+    category: "CPC",
+    content: `LEGAL NOTICE UNDER SECTION 80 OF THE CODE OF CIVIL PROCEDURE, 1908
 
 To,
 {{recipientName}}
@@ -145,13 +63,13 @@ Under instructions from and on behalf of my client {{clientName}}, {{clientAddre
 Advocate
 {{barCouncilNumber}}
 {{firmAddress}}`,
-      variables: JSON.stringify(["recipientName", "recipientDesignation", "recipientAddress", "date", "clientName", "clientAddress", "clientDetails", "grievanceDetails", "amount", "reason", "demandDetails", "senderName", "barCouncilNumber", "firmAddress"]),
-    },
-    {
-      name: "Demand Notice",
-      description: "General demand notice for recovery of dues",
-      category: "GENERAL",
-      content: `DEMAND NOTICE
+    variables: JSON.stringify(["recipientName", "recipientDesignation", "recipientAddress", "date", "clientName", "clientAddress", "clientDetails", "grievanceDetails", "amount", "reason", "demandDetails", "senderName", "barCouncilNumber", "firmAddress"]),
+  },
+  {
+    name: "Demand Notice",
+    description: "General demand notice for recovery of dues",
+    category: "GENERAL",
+    content: `DEMAND NOTICE
 
 To,
 {{recipientName}}
@@ -176,13 +94,13 @@ Please treat this notice as final opportunity.
 {{senderName}}
 Advocate
 {{barCouncilNumber}}`,
-      variables: JSON.stringify(["recipientName", "recipientAddress", "date", "amount", "clientName", "factualBackground", "amountInWords", "reason", "days", "senderName", "barCouncilNumber"]),
-    },
-    {
-      name: "Eviction Notice",
-      description: "Notice to tenant for eviction under Rent Control Act",
-      category: "PROPERTY",
-      content: `EVICTION NOTICE
+    variables: JSON.stringify(["recipientName", "recipientAddress", "date", "amount", "clientName", "factualBackground", "amountInWords", "reason", "days", "senderName", "barCouncilNumber"]),
+  },
+  {
+    name: "Eviction Notice",
+    description: "Notice to tenant for eviction under Rent Control Act",
+    category: "PROPERTY",
+    content: `EVICTION NOTICE
 
 To,
 {{tenantName}}
@@ -205,13 +123,13 @@ In the event of your failure to comply, my client shall be constrained to initia
 {{senderName}}
 Advocate
 {{barCouncilNumber}}`,
-      variables: JSON.stringify(["tenantName", "tenantAddress", "date", "propertyAddress", "landlordName", "evictionGrounds", "days", "senderName", "barCouncilNumber"]),
-    },
-    {
-      name: "Cease and Desist Notice",
-      description: "Notice to cease unlawful activity",
-      category: "GENERAL",
-      content: `CEASE AND DESIST NOTICE
+    variables: JSON.stringify(["tenantName", "tenantAddress", "date", "propertyAddress", "landlordName", "evictionGrounds", "days", "senderName", "barCouncilNumber"]),
+  },
+  {
+    name: "Cease and Desist Notice",
+    description: "Notice to cease unlawful activity",
+    category: "GENERAL",
+    content: `CEASE AND DESIST NOTICE
 
 To,
 {{recipientName}}
@@ -236,13 +154,13 @@ Failure to comply within {{days}} days shall result in legal proceedings being i
 {{senderName}}
 Advocate
 {{barCouncilNumber}}`,
-      variables: JSON.stringify(["recipientName", "recipientAddress", "date", "clientName", "unlawfulActivity", "legalBasis", "applicableLaw", "activity", "remedialAction", "days", "senderName", "barCouncilNumber"]),
-    },
-    {
-      name: "Reply to Legal Notice",
-      description: "Standard reply/response to a received legal notice",
-      category: "GENERAL",
-      content: `REPLY TO LEGAL NOTICE
+    variables: JSON.stringify(["recipientName", "recipientAddress", "date", "clientName", "unlawfulActivity", "legalBasis", "applicableLaw", "activity", "remedialAction", "days", "senderName", "barCouncilNumber"]),
+  },
+  {
+    name: "Reply to Legal Notice",
+    description: "Standard reply/response to a received legal notice",
+    category: "GENERAL",
+    content: `REPLY TO LEGAL NOTICE
 
 To,
 {{senderAdvocateName}}
@@ -265,13 +183,13 @@ My client reserves all rights to take appropriate legal action as may be advised
 {{responderName}}
 Advocate
 {{barCouncilNumber}}`,
-      variables: JSON.stringify(["senderAdvocateName", "senderAddress", "date", "originalNoticeDate", "clientName", "replyContent", "responderName", "barCouncilNumber"]),
-    },
-    {
-      name: "Cheque Bounce Notice (Section 138 NI Act)",
-      description: "Statutory notice under Section 138 of the Negotiable Instruments Act, 1881",
-      category: "NI_ACT",
-      content: `LEGAL NOTICE UNDER SECTION 138 OF THE NEGOTIABLE INSTRUMENTS ACT, 1881
+    variables: JSON.stringify(["senderAdvocateName", "senderAddress", "date", "originalNoticeDate", "clientName", "replyContent", "responderName", "barCouncilNumber"]),
+  },
+  {
+    name: "Cheque Bounce Notice (Section 138 NI Act)",
+    description: "Statutory notice under Section 138 of the Negotiable Instruments Act, 1881",
+    category: "NI_ACT",
+    content: `LEGAL NOTICE UNDER SECTION 138 OF THE NEGOTIABLE INSTRUMENTS ACT, 1881
 
 To,
 {{drawerName}}
@@ -296,13 +214,13 @@ Under instructions from my client {{payeeName}}, {{payeeAddress}}, I serve this 
 {{senderName}}
 Advocate
 {{barCouncilNumber}}`,
-      variables: JSON.stringify(["drawerName", "drawerAddress", "date", "payeeName", "payeeAddress", "chequeNumber", "chequeDate", "amount", "amountInWords", "bankName", "branchName", "purpose", "presentationDate", "dishonourDate", "dishonourReason", "senderName", "barCouncilNumber"]),
-    },
-    {
-      name: "Rent Demand Notice",
-      description: "Notice demanding payment of rent arrears",
-      category: "PROPERTY",
-      content: `RENT DEMAND NOTICE
+    variables: JSON.stringify(["drawerName", "drawerAddress", "date", "payeeName", "payeeAddress", "chequeNumber", "chequeDate", "amount", "amountInWords", "bankName", "branchName", "purpose", "presentationDate", "dishonourDate", "dishonourReason", "senderName", "barCouncilNumber"]),
+  },
+  {
+    name: "Rent Demand Notice",
+    description: "Notice demanding payment of rent arrears",
+    category: "PROPERTY",
+    content: `RENT DEMAND NOTICE
 
 To,
 {{tenantName}}
@@ -325,123 +243,95 @@ You are hereby called upon to pay the entire arrears within {{days}} days from r
 {{senderName}}
 Advocate
 {{barCouncilNumber}}`,
-      variables: JSON.stringify(["tenantName", "tenantAddress", "date", "landlordName", "propertyAddress", "monthlyRent", "arrearsPeriod", "totalArrears", "arrearsInWords", "days", "senderName", "barCouncilNumber"]),
-    },
-  ];
+    variables: JSON.stringify(["tenantName", "tenantAddress", "date", "landlordName", "propertyAddress", "monthlyRent", "arrearsPeriod", "totalArrears", "arrearsInWords", "days", "senderName", "barCouncilNumber"]),
+  },
+];
 
-  for (const template of templates) {
+// ---------------------------------------------------------------------------
+// Main
+// ---------------------------------------------------------------------------
+
+async function main() {
+  const dbPath = process.env.DATABASE_PATH || "./data/legal-rag.db";
+  console.log("Connecting to local SQLite:", dbPath);
+
+  const adapter = new PrismaBetterSqlite3({ url: dbPath });
+  const prisma = new PrismaClient({ adapter } as any);
+
+  // Read config from env vars
+  const orgName = process.env.ORG_NAME || "My Law Firm";
+  const orgSlug = process.env.ORG_SLUG || "my-law-firm";
+  const orgEmail = process.env.ORG_EMAIL || "";
+  const orgAddress = process.env.ORG_ADDRESS || "";
+  const orgPhone = process.env.ORG_PHONE || "";
+
+  const adminEmail = process.env.ADMIN_EMAIL || "admin@legalrag.com";
+  const adminName = process.env.ADMIN_NAME || "System Admin";
+  const seedPassword = process.env.SEED_PASSWORD || "changeme123";
+  const hashedPassword = await bcrypt.hash(seedPassword, 12);
+
+  // --- Create organization ---
+  const org = await prisma.organization.upsert({
+    where: { slug: orgSlug },
+    update: {},
+    create: {
+      name: orgName,
+      slug: orgSlug,
+      address: orgAddress || null,
+      phone: orgPhone || null,
+      email: orgEmail || null,
+      plan: "PROFESSIONAL",
+      maxUsers: 25,
+      maxCases: 500,
+      maxDocuments: 5000,
+      maxAiQueries: 1000,
+    },
+  });
+
+  // --- Create admin user ---
+  await prisma.user.upsert({
+    where: { email: adminEmail },
+    update: {},
+    create: {
+      email: adminEmail,
+      password: hashedPassword,
+      name: adminName,
+      role: "ADMIN",
+      organizationId: org.id,
+    },
+  });
+
+  // --- Seed generic notice templates ---
+  let noticeCount = 0;
+  for (const template of NOTICE_TEMPLATES) {
+    const templateId = template.name.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase();
     await prisma.noticeTemplate.upsert({
-      where: { id: template.name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase() },
+      where: { id: templateId },
       update: {},
       create: {
-        id: template.name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase(),
+        id: templateId,
         organizationId: org.id,
         ...template,
       },
     });
+    noticeCount++;
   }
 
-  // Sample clients
-  const client1 = await prisma.client.upsert({
-    where: { id: "client-1" },
-    update: {},
-    create: {
-      id: "client-1",
-      organizationId: org.id,
-      name: "Mahesh Industries Pvt. Ltd.",
-      email: "mahesh@industries.com",
-      phone: "+91-9812345678",
-      address: "45, Industrial Area, Phase-II, Pune - 411001",
-      clientType: "COMPANY",
-      gstNumber: "27AABCM1234K1Z5",
-      notes: "Long-standing client. Multiple ongoing matters.",
-    },
-  });
-
-  const client2 = await prisma.client.upsert({
-    where: { id: "client-2" },
-    update: {},
-    create: {
-      id: "client-2",
-      organizationId: org.id,
-      name: "Smt. Kavita Deshmukh",
-      email: "kavita.d@gmail.com",
-      phone: "+91-9823456789",
-      address: "12, Shivaji Nagar, Mumbai - 400028",
-      clientType: "INDIVIDUAL",
-      aadharNumber: "1234-5678-9012",
-      notes: "Property dispute matter.",
-    },
-  });
-
-  // Sample case
-  const case1 = await prisma.case.upsert({
-    where: { caseNumber: "CS/123/2024" },
-    update: {},
-    create: {
-      organizationId: org.id,
-      caseNumber: "CS/123/2024",
-      title: "Mahesh Industries vs. ABC Traders - Recovery Suit",
-      description: "Recovery suit for unpaid invoices worth Rs. 25,00,000",
-      caseType: "CIVIL",
-      courtName: "City Civil Court, Mumbai",
-      courtType: "DISTRICT_COURT",
-      judge: "Hon'ble Judge S.M. Patil",
-      filingDate: new Date("2024-03-15"),
-      nextHearingDate: new Date("2026-03-20"),
-      status: "ACTIVE",
-      priority: "HIGH",
-    },
-  });
-
-  // Link client to case
-  await prisma.caseClient.upsert({
-    where: { caseId_clientId: { caseId: case1.id, clientId: client1.id } },
-    update: {},
-    create: {
-      caseId: case1.id,
-      clientId: client1.id,
-      role: "PETITIONER",
-    },
-  });
-
-  // Assign senior advocate
-  await prisma.caseAssignment.upsert({
-    where: { caseId_userId: { caseId: case1.id, userId: senior.id } },
-    update: {},
-    create: {
-      caseId: case1.id,
-      userId: senior.id,
-      role: "LEAD",
-    },
-  });
-
-  // Sample diary entry
-  await prisma.diaryEntry.create({
-    data: {
-      organizationId: org.id,
-      caseId: case1.id,
-      date: new Date("2026-03-20"),
-      courtName: "City Civil Court, Mumbai",
-      caseNumber: "CS/123/2024",
-      description: "Arguments on behalf of plaintiff",
-      stage: "Arguments",
-      nextDate: new Date("2026-04-10"),
-    },
-  });
-
-  console.log("Seed completed successfully!");
-  console.log(`All users seeded with password: ${seedPassword}`);
-  console.log("Admin: admin@legalrag.com");
-  console.log("Senior Advocate: senior@legalrag.com");
-  console.log("Junior Advocate: junior@legalrag.com");
-  console.log("Clerk: clerk@legalrag.com");
-  console.log("Intern: intern@legalrag.com");
-  console.log("Set SEED_PASSWORD env var to customize the password.");
+  // --- Summary ---
+  console.log("\n========================================");
+  console.log("  Database Seed Complete");
+  console.log("========================================");
+  console.log(`  Organization : ${orgName}`);
+  console.log(`  Admin Email  : ${adminEmail}`);
+  console.log(`  Templates    : ${noticeCount} notice templates`);
+  console.log("----------------------------------------");
+  console.log("  Set these env vars to customize:");
+  console.log("    SEED_PASSWORD, ADMIN_EMAIL, ADMIN_NAME");
+  console.log("    ORG_NAME, ORG_SLUG, ORG_EMAIL");
+  console.log("========================================\n");
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  });
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
+});
