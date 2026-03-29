@@ -23,12 +23,36 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Calendar, FileText, Users, BookOpen, Scale, RefreshCw, Loader2, Plus, Trash2, UserX, MapPin, Phone } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { ArrowLeft, Calendar, FileText, Users, BookOpen, Scale, RefreshCw, Loader2, Plus, Trash2, UserX, MapPin, Phone, ChevronDown } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
+const STATUSES = ["ACTIVE", "PENDING", "CLOSED", "DISPOSED", "TRANSFERRED"];
+const PRIORITIES = ["LOW", "MEDIUM", "HIGH", "URGENT"];
+const STAGES = ["PRE_FILING", "FILED", "NOTICE", "WRITTEN_STATEMENT", "TRIAL", "ARGUMENTS", "JUDGMENT", "EXECUTION"];
 const PARTY_TYPES = ["RESPONDENT", "DEFENDANT", "OPPOSITE_PARTY", "ACCUSED"];
+
+const priorityColors: Record<string, string> = {
+  LOW: "bg-gray-100 text-gray-800",
+  MEDIUM: "bg-blue-100 text-blue-800",
+  HIGH: "bg-orange-100 text-orange-800",
+  URGENT: "bg-red-100 text-red-800",
+};
+
+const statusColors: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
+  ACTIVE: "default",
+  PENDING: "secondary",
+  CLOSED: "outline",
+  DISPOSED: "outline",
+  TRANSFERRED: "secondary",
+};
 
 export default function CaseDetailPage() {
   const params = useParams();
@@ -67,6 +91,24 @@ export default function CaseDetailPage() {
     setSyncing(false);
   };
 
+  const updateField = async (field: string, value: string) => {
+    try {
+      const res = await fetch(`/api/cases/${params.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ [field]: value }),
+      });
+      if (res.ok) {
+        setCaseData((prev: any) => ({ ...prev, [field]: value }));
+        toast.success(`${field.charAt(0).toUpperCase() + field.slice(1)} updated to ${value}`);
+      } else {
+        toast.error(`Failed to update ${field}`);
+      }
+    } catch {
+      toast.error(`Failed to update ${field}`);
+    }
+  };
+
   const handleSaveCNR = async () => {
     if (!cnrInput.trim()) return;
     try {
@@ -94,10 +136,67 @@ export default function CaseDetailPage() {
           <Button variant="ghost" size="icon"><ArrowLeft className="h-4 w-4" /></Button>
         </Link>
         <div className="flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-bold">{caseData.caseNumber}</h1>
-            <Badge>{caseData.status}</Badge>
-            <Badge variant="outline">{caseData.priority}</Badge>
+            {/* Status dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger className="inline-flex items-center cursor-pointer">
+                  <Badge variant={statusColors[caseData.status] || "secondary"} className="cursor-pointer hover:opacity-80">
+                    {caseData.status} <ChevronDown className="h-3 w-3 ml-1" />
+                  </Badge>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {STATUSES.map((s) => (
+                  <DropdownMenuItem
+                    key={s}
+                    onClick={() => updateField("status", s)}
+                    className={caseData.status === s ? "bg-accent font-medium" : ""}
+                  >
+                    {s}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {/* Priority dropdown */}
+            <DropdownMenu>
+              <DropdownMenuTrigger className="inline-flex items-center cursor-pointer">
+                  <span className={`text-xs px-2 py-0.5 rounded-full cursor-pointer hover:opacity-80 inline-flex items-center gap-1 ${priorityColors[caseData.priority] || ""}`}>
+                    {caseData.priority} <ChevronDown className="h-3 w-3" />
+                  </span>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start">
+                {PRIORITIES.map((p) => (
+                  <DropdownMenuItem
+                    key={p}
+                    onClick={() => updateField("priority", p)}
+                    className={caseData.priority === p ? "bg-accent font-medium" : ""}
+                  >
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${priorityColors[p]}`}>{p}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+            {/* Stage dropdown */}
+            {caseData.stage && (
+              <DropdownMenu>
+                <DropdownMenuTrigger className="inline-flex items-center cursor-pointer">
+                    <Badge variant="outline" className="cursor-pointer hover:opacity-80">
+                      {caseData.stage.replace(/_/g, " ")} <ChevronDown className="h-3 w-3 ml-1" />
+                    </Badge>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start">
+                  {STAGES.map((s) => (
+                    <DropdownMenuItem
+                      key={s}
+                      onClick={() => updateField("stage", s)}
+                      className={caseData.stage === s ? "bg-accent font-medium" : ""}
+                    >
+                      {s.replace(/_/g, " ")}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
           </div>
           <p className="text-muted-foreground">{caseData.title}</p>
         </div>

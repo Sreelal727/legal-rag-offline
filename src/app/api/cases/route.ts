@@ -10,6 +10,7 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const search = searchParams.get("search") || "";
   const status = searchParams.get("status") || "";
+  const priority = searchParams.get("priority") || "";
   const page = parseInt(searchParams.get("page") || "1");
   const limit = parseInt(searchParams.get("limit") || "20");
 
@@ -22,6 +23,7 @@ export async function GET(request: NextRequest) {
     ];
   }
   if (status) where.status = status;
+  if (priority) where.priority = priority;
 
   const [cases, total] = await Promise.all([
     prisma.case.findMany({

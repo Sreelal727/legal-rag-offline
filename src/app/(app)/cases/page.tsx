@@ -21,11 +21,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Briefcase, Scale, Users } from "lucide-react";
+import { Plus, Search, Briefcase, Scale, Users, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/role-gate";
 import Link from "next/link";
 import { format } from "date-fns";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const CASE_TYPES = ["CIVIL", "CRIMINAL", "WRIT", "APPEAL", "REVISION", "EXECUTION", "ARBITRATION", "OTHER"];
 const COURT_TYPES = ["SUPREME_COURT", "HIGH_COURT", "DISTRICT_COURT", "TRIBUNAL", "CONSUMER_FORUM", "OTHER"];
@@ -75,6 +81,7 @@ export default function CasesPage() {
   const [cases, setCases] = useState<CaseItem[]>([]);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
+  const [priorityFilter, setPriorityFilter] = useState("");
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [existingClients, setExistingClients] = useState<ExistingClient[]>([]);
@@ -86,11 +93,26 @@ export default function CasesPage() {
     const params = new URLSearchParams();
     if (search) params.set("search", search);
     if (statusFilter) params.set("status", statusFilter);
+    if (priorityFilter) params.set("priority", priorityFilter);
     const res = await fetch(`/api/cases?${params.toString()}`);
     const data = await res.json();
     setCases(data.cases || []);
     setLoading(false);
-  }, [search, statusFilter]);
+  }, [search, statusFilter, priorityFilter]);
+
+  const updateCaseField = async (caseId: string, field: string, value: string) => {
+    const res = await fetch(`/api/cases/${caseId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ [field]: value }),
+    });
+    if (res.ok) {
+      setCases((prev) => prev.map((c) => c.id === caseId ? { ...c, [field]: value } : c));
+      toast.success(`${field.charAt(0).toUpperCase() + field.slice(1)} updated to ${value}`);
+    } else {
+      toast.error(`Failed to update ${field}`);
+    }
+  };
 
   useEffect(() => {
     fetchCases();
@@ -330,7 +352,7 @@ export default function CasesPage() {
             className="pl-10"
           />
         </div>
-        <Select value={statusFilter} onValueChange={(v: any) => setStatusFilter(String(v || ""))}>
+        <Select value={statusFilter} onValueChange={(v: any) => setStatusFilter(v === "all" ? "" : String(v || ""))}>
           <SelectTrigger className="w-40">
             <SelectValue placeholder="All Status" />
           </SelectTrigger>
@@ -338,6 +360,17 @@ export default function CasesPage() {
             <SelectItem value="all">All Status</SelectItem>
             {STATUSES.map((s) => (
               <SelectItem key={s} value={s}>{s}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={priorityFilter} onValueChange={(v: any) => setPriorityFilter(v === "all" ? "" : String(v || ""))}>
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="All Priority" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Priority</SelectItem>
+            {PRIORITIES.map((p) => (
+              <SelectItem key={p} value={p}>{p}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -350,46 +383,82 @@ export default function CasesPage() {
       ) : (
         <div className="space-y-4">
           {cases.map((c) => (
-            <Link key={c.id} href={`/cases/${c.id}`}>
-              <Card className="hover:shadow-md transition-shadow cursor-pointer mb-4">
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
+            <Card key={c.id} className="hover:shadow-md transition-shadow mb-4">
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Link href={`/cases/${c.id}`} className="flex items-center gap-2 hover:underline">
                         <Briefcase className="h-4 w-4 text-muted-foreground" />
                         <span className="font-mono text-sm font-medium">{c.caseNumber}</span>
-                        <Badge variant={statusColors[c.status] || "secondary"}>{c.status}</Badge>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${priorityColors[c.priority] || ""}`}>
-                          {c.priority}
-                        </span>
-                      </div>
-                      <p className="font-medium">{c.title}</p>
-                      <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                        {c.courtName && (
-                          <span className="flex items-center gap-1">
-                            <Scale className="h-3 w-3" /> {c.courtName}
-                          </span>
-                        )}
-                        {c.caseClients.length > 0 && (
-                          <span className="flex items-center gap-1">
-                            <Users className="h-3 w-3" />
-                            {c.caseClients.map((cc) => cc.client.name).join(", ")}
-                          </span>
-                        )}
-                      </div>
+                      </Link>
+                      {/* Status dropdown */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger className="inline-flex items-center gap-1 cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                            <Badge variant={statusColors[c.status] || "secondary"} className="cursor-pointer hover:opacity-80">
+                              {c.status} <ChevronDown className="h-3 w-3 ml-0.5" />
+                            </Badge>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start">
+                          {STATUSES.map((s) => (
+                            <DropdownMenuItem
+                              key={s}
+                              onClick={(e) => { e.stopPropagation(); updateCaseField(c.id, "status", s); }}
+                              className={c.status === s ? "bg-accent font-medium" : ""}
+                            >
+                              {s}
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                      {/* Priority dropdown */}
+                      <DropdownMenu>
+                        <DropdownMenuTrigger className="inline-flex items-center gap-1 cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                            <span className={`text-xs px-2 py-0.5 rounded-full cursor-pointer hover:opacity-80 inline-flex items-center gap-1 ${priorityColors[c.priority] || ""}`}>
+                              {c.priority} <ChevronDown className="h-3 w-3" />
+                            </span>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start">
+                          {PRIORITIES.map((p) => (
+                            <DropdownMenuItem
+                              key={p}
+                              onClick={(e) => { e.stopPropagation(); updateCaseField(c.id, "priority", p); }}
+                              className={c.priority === p ? "bg-accent font-medium" : ""}
+                            >
+                              <span className={`text-xs px-2 py-0.5 rounded-full ${priorityColors[p]}`}>{p}</span>
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
-                    <div className="text-right text-sm">
-                      {c.nextHearingDate && (
-                        <div>
-                          <p className="text-xs text-muted-foreground">Next Hearing</p>
-                          <p className="font-medium">{format(new Date(c.nextHearingDate), "dd MMM yyyy")}</p>
-                        </div>
+                    <Link href={`/cases/${c.id}`} className="block hover:underline">
+                      <p className="font-medium">{c.title}</p>
+                    </Link>
+                    <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                      {c.courtName && (
+                        <span className="flex items-center gap-1">
+                          <Scale className="h-3 w-3" /> {c.courtName}
+                        </span>
+                      )}
+                      {c.caseClients.length > 0 && (
+                        <span className="flex items-center gap-1">
+                          <Users className="h-3 w-3" />
+                          {c.caseClients.map((cc) => cc.client.name).join(", ")}
+                        </span>
                       )}
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            </Link>
+                  <div className="text-right text-sm">
+                    {c.nextHearingDate && (
+                      <div>
+                        <p className="text-xs text-muted-foreground">Next Hearing</p>
+                        <p className="font-medium">{format(new Date(c.nextHearingDate), "dd MMM yyyy")}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           ))}
         </div>
       )}
