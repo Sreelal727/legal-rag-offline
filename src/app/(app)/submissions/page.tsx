@@ -31,10 +31,14 @@ import {
   ArrowRight,
   ArrowLeft,
   FileCheck,
+  Search,
+  X,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/role-gate";
 import { format } from "date-fns";
+import { useRef } from "react";
 
 const COLUMNS = [
   { id: "TODO", label: "To Do", color: "bg-slate-100 border-slate-300" },
@@ -165,16 +169,26 @@ export default function SubmissionsPage() {
     fetchCasesAndUsers();
   }, [fetchSubmissions, fetchCasesAndUsers]);
 
+  const [caseSearch, setCaseSearch] = useState("");
+  const [clientSearch, setClientSearch] = useState("");
+  const [caseDropdownOpen, setCaseDropdownOpen] = useState(false);
+  const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
+  const caseInputRef = useRef<HTMLInputElement>(null);
+  const clientInputRef = useRef<HTMLInputElement>(null);
+
   // When case changes, auto-fill client and court
   const handleCaseChange = (caseId: string) => {
     setSelectedCaseId(caseId);
     const selectedCase = cases.find((c) => c.id === caseId);
     if (selectedCase) {
+      setCaseSearch("");
+      setCaseDropdownOpen(false);
       // Auto-fill court name
       if (selectedCase.courtName) setAutoCourtName(selectedCase.courtName);
       // Auto-select first client of the case
       if (selectedCase.clients.length > 0) {
         setSelectedClientId(selectedCase.clients[0].id);
+        setClientSearch("");
       } else {
         setSelectedClientId("");
       }
@@ -182,6 +196,83 @@ export default function SubmissionsPage() {
       setAutoCourtName("");
       setSelectedClientId("");
     }
+  };
+
+  // When client changes, auto-fill case if only one case links to this client
+  const handleClientChange = (clientId: string) => {
+    setSelectedClientId(clientId);
+    setClientSearch("");
+    setClientDropdownOpen(false);
+    // If no case selected, try to find a case linked to this client
+    if (!selectedCaseId) {
+      const linkedCase = cases.find((c) =>
+        c.clients.some((cl) => cl.id === clientId)
+      );
+      if (linkedCase) {
+        setSelectedCaseId(linkedCase.id);
+        if (linkedCase.courtName) setAutoCourtName(linkedCase.courtName);
+      }
+    }
+  };
+
+  const clearCase = () => {
+    setSelectedCaseId("");
+    setCaseSearch("");
+    setAutoCourtName("");
+    setSelectedClientId("");
+    setClientSearch("");
+  };
+
+  const clearClient = () => {
+    setSelectedClientId("");
+    setClientSearch("");
+  };
+
+  // Get display label for selected case
+  const selectedCaseLabel = (() => {
+    const c = cases.find((c) => c.id === selectedCaseId);
+    return c ? `${c.caseNumber} — ${c.title}` : "";
+  })();
+
+  // Get display label for selected client
+  const selectedClientLabel = (() => {
+    if (selectedCaseId) {
+      const selectedCase = cases.find((c) => c.id === selectedCaseId);
+      const cl = selectedCase?.clients.find((cl) => cl.id === selectedClientId);
+      if (cl) return `${cl.name} (${cl.role})`;
+    }
+    const cl = allClients.find((c) => c.id === selectedClientId);
+    return cl ? cl.name : "";
+  })();
+
+  // Filtered cases for search
+  const filteredCases = caseSearch
+    ? cases.filter(
+        (c) =>
+          c.caseNumber.toLowerCase().includes(caseSearch.toLowerCase()) ||
+          c.title.toLowerCase().includes(caseSearch.toLowerCase()) ||
+          (c.courtName || "").toLowerCase().includes(caseSearch.toLowerCase())
+      )
+    : cases;
+
+  // Filtered clients for search
+  const getFilteredClients = () => {
+    if (selectedCaseId) {
+      const selectedCase = cases.find((c) => c.id === selectedCaseId);
+      const caseClients = selectedCase?.clients || [];
+      if (clientSearch) {
+        return caseClients.filter((cl) =>
+          cl.name.toLowerCase().includes(clientSearch.toLowerCase())
+        );
+      }
+      return caseClients;
+    }
+    if (clientSearch) {
+      return allClients.filter((cl) =>
+        cl.name.toLowerCase().includes(clientSearch.toLowerCase())
+      );
+    }
+    return allClients;
   };
 
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -308,6 +399,10 @@ export default function SubmissionsPage() {
                 setSelectedCaseId("");
                 setSelectedClientId("");
                 setAutoCourtName("");
+                setCaseSearch("");
+                setClientSearch("");
+                setCaseDropdownOpen(false);
+                setClientDropdownOpen(false);
               }
             }}>
             <DialogTrigger asChild>
@@ -315,7 +410,7 @@ export default function SubmissionsPage() {
                 <Plus className="mr-2 h-4 w-4" /> Add Document
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-lg">
+            <DialogContent className="max-w-lg" onClick={() => { setCaseDropdownOpen(false); setClientDropdownOpen(false); }}>
               <DialogHeader>
                 <DialogTitle>New Document Submission</DialogTitle>
               </DialogHeader>
@@ -370,63 +465,105 @@ export default function SubmissionsPage() {
                     placeholder="Details about the document..."
                   />
                 </div>
+                {/* Searchable Case Dropdown */}
                 <div className="space-y-2">
                   <Label>Case</Label>
-                  <Select
-                    value={selectedCaseId}
-                    onValueChange={(v) => handleCaseChange(v ?? "")}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select case" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {cases.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.caseNumber} — {c.title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <div className="relative">
+                    {selectedCaseId ? (
+                      <div className="flex items-center gap-2 border rounded-md px-3 py-2 text-sm bg-muted/30">
+                        <Briefcase className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span className="truncate flex-1">{selectedCaseLabel}</span>
+                        <button type="button" onClick={clearCase} className="text-muted-foreground hover:text-foreground">
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          ref={caseInputRef}
+                          placeholder="Search by case number, title, or court..."
+                          value={caseSearch}
+                          onChange={(e) => { setCaseSearch(e.target.value); setCaseDropdownOpen(true); }}
+                          onFocus={() => setCaseDropdownOpen(true)}
+                          className="pl-9"
+                          autoComplete="off"
+                        />
+                      </div>
+                    )}
+                    {caseDropdownOpen && !selectedCaseId && (
+                      <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto rounded-md border bg-popover shadow-lg">
+                        {filteredCases.length === 0 ? (
+                          <div className="px-3 py-2 text-sm text-muted-foreground">No cases found</div>
+                        ) : (
+                          filteredCases.slice(0, 50).map((c) => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                              onClick={() => handleCaseChange(c.id)}
+                            >
+                              <Briefcase className="h-3 w-3 shrink-0 text-muted-foreground" />
+                              <span className="font-mono text-xs">{c.caseNumber}</span>
+                              <span className="truncate text-muted-foreground">— {c.title}</span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
+
+                {/* Searchable Client Dropdown */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Client</Label>
-                    <Select
-                      value={selectedClientId}
-                      onValueChange={(v) => setSelectedClientId(v ?? "")}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={selectedCaseId ? "Select client" : "Select case first"} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {selectedCaseId ? (
-                          // Show clients linked to the selected case
-                          (() => {
-                            const selectedCase = cases.find((c) => c.id === selectedCaseId);
-                            const caseClients = selectedCase?.clients || [];
-                            if (caseClients.length === 0) {
-                              return (
-                                <SelectItem value="__none" disabled>
-                                  No clients linked to this case
-                                </SelectItem>
-                              );
+                    <div className="relative">
+                      {selectedClientId ? (
+                        <div className="flex items-center gap-2 border rounded-md px-3 py-2 text-sm bg-muted/30">
+                          <User className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          <span className="truncate flex-1">{selectedClientLabel}</span>
+                          <button type="button" onClick={clearClient} className="text-muted-foreground hover:text-foreground">
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            ref={clientInputRef}
+                            placeholder="Search client name..."
+                            value={clientSearch}
+                            onChange={(e) => { setClientSearch(e.target.value); setClientDropdownOpen(true); }}
+                            onFocus={() => setClientDropdownOpen(true)}
+                            className="pl-9"
+                            autoComplete="off"
+                          />
+                        </div>
+                      )}
+                      {clientDropdownOpen && !selectedClientId && (
+                        <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto rounded-md border bg-popover shadow-lg">
+                          {(() => {
+                            const filtered = getFilteredClients();
+                            if (filtered.length === 0) {
+                              return <div className="px-3 py-2 text-sm text-muted-foreground">No clients found</div>;
                             }
-                            return caseClients.map((cl) => (
-                              <SelectItem key={cl.id} value={cl.id}>
-                                {cl.name} ({cl.role})
-                              </SelectItem>
+                            return filtered.slice(0, 50).map((cl: any) => (
+                              <button
+                                key={cl.id}
+                                type="button"
+                                className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground flex items-center gap-2"
+                                onClick={() => handleClientChange(cl.id)}
+                              >
+                                <User className="h-3 w-3 shrink-0 text-muted-foreground" />
+                                <span>{cl.name}</span>
+                                {cl.role && <span className="text-xs text-muted-foreground">({cl.role})</span>}
+                              </button>
                             ));
-                          })()
-                        ) : (
-                          // Show all clients when no case selected
-                          allClients.map((cl) => (
-                            <SelectItem key={cl.id} value={cl.id}>
-                              {cl.name}
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
+                          })()}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div className="space-y-2">
                     <Label>Assign To</Label>
