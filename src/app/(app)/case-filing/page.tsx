@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -31,6 +31,8 @@ import {
   Trash2,
   Sparkles,
   Database,
+  Search,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/role-gate";
@@ -81,6 +83,13 @@ interface CaseOption {
   caseNumber: string;
   title: string;
   courtName: string | null;
+  caseType: string | null;
+  courtType: string | null;
+  judge: string | null;
+  filingDate: string | null;
+  status: string | null;
+  stage: string | null;
+  clients: { name: string; role: string; address: string; phone: string; fatherHusbandName: string }[];
 }
 
 export default function CaseFilingPage() {
@@ -109,6 +118,11 @@ export default function CaseFilingPage() {
   const [viewOpen, setViewOpen] = useState(false);
   const [viewDoc, setViewDoc] = useState<CaseDocument | null>(null);
 
+  // Case search dropdown
+  const [caseSearch, setCaseSearch] = useState("");
+  const [caseDropdownOpen, setCaseDropdownOpen] = useState(false);
+  const caseDropdownRef = useRef<HTMLDivElement>(null);
+
   // Filter
   const [statusFilter, setStatusFilter] = useState("ALL");
 
@@ -125,7 +139,7 @@ export default function CaseFilingPage() {
   }, []);
 
   const fetchCases = useCallback(async () => {
-    const res = await fetch("/api/cases?limit=200");
+    const res = await fetch("/api/cases?limit=5000");
     const data = await res.json();
     setCases(
       (data.cases || []).map((c: any) => ({
@@ -133,6 +147,19 @@ export default function CaseFilingPage() {
         caseNumber: c.caseNumber,
         title: c.title,
         courtName: c.courtName || null,
+        caseType: c.caseType || null,
+        courtType: c.courtType || null,
+        judge: c.judge || null,
+        filingDate: c.filingDate || null,
+        status: c.status || null,
+        stage: c.stage || null,
+        clients: (c.caseClients || []).map((cc: any) => ({
+          name: cc.client?.name || "",
+          role: cc.role || "",
+          address: cc.client?.address || "",
+          phone: cc.client?.phone || "",
+          fatherHusbandName: cc.client?.fatherHusbandName || "",
+        })),
       }))
     );
   }, []);
@@ -157,6 +184,7 @@ export default function CaseFilingPage() {
   const openGenerateDialog = (template: CaseTemplate) => {
     setSelectedTemplate(template);
     setSelectedCaseId("");
+    setCaseSearch("");
     setVariableValues({});
     setPreviewContent("");
     setShowPreview(false);
@@ -168,13 +196,82 @@ export default function CaseFilingPage() {
     setSelectedCaseId(caseId);
     const caseData = cases.find((c) => c.id === caseId);
     if (caseData) {
+      setCaseSearch(`${caseData.caseNumber} - ${caseData.title}`);
+      setCaseDropdownOpen(false);
+
+      // Auto-fill all possible template variables from case data
+      const petitionerRoles = ["PETITIONER", "PLAINTIFF", "COMPLAINANT"];
+      const respondentRoles = ["RESPONDENT", "DEFENDANT", "ACCUSED"];
+
+      const petitioners = caseData.clients.filter((cl) => petitionerRoles.includes(cl.role));
+      const respondents = caseData.clients.filter((cl) => respondentRoles.includes(cl.role));
+      const allClients = caseData.clients;
+
+      const pet = petitioners[0] || { name: "", address: "", phone: "", fatherHusbandName: "" };
+      const resp = respondents[0] || { name: "", address: "", phone: "", fatherHusbandName: "" };
+      const firstClient = allClients[0] || { name: "", address: "", phone: "", fatherHusbandName: "" };
+
       setVariableValues((prev) => ({
         ...prev,
+        // Case details
         courtName: caseData.courtName || prev.courtName || "",
         caseNumber: caseData.caseNumber || prev.caseNumber || "",
+        caseTitle: caseData.title || prev.caseTitle || "",
+        caseType: caseData.caseType?.replace(/_/g, " ") || prev.caseType || "",
+        courtType: caseData.courtType?.replace(/_/g, " ") || prev.courtType || "",
+        judge: caseData.judge || prev.judge || "",
+        judgeName: caseData.judge || prev.judgeName || "",
+        filingDate: caseData.filingDate ? new Date(caseData.filingDate).toLocaleDateString("en-IN") : prev.filingDate || "",
+
+        // Petitioner / Plaintiff / Complainant
+        petitionerName: pet.name || prev.petitionerName || "",
+        petitionerNames: petitioners.map((p) => p.name).join(", ") || prev.petitionerNames || "",
+        petitionerAddress: pet.address || prev.petitionerAddress || "",
+        plaintiffName: pet.name || prev.plaintiffName || "",
+        plaintiffAddress: pet.address || prev.plaintiffAddress || "",
+        complainantName: pet.name || prev.complainantName || "",
+        complainantAddress: pet.address || prev.complainantAddress || "",
+        complainantPhone: pet.phone || prev.complainantPhone || "",
+        complainantFatherName: pet.fatherHusbandName || prev.complainantFatherName || "",
+
+        // Respondent / Defendant / Accused
+        respondentName: resp.name || prev.respondentName || "",
+        respondentNames: respondents.map((r) => r.name).join(", ") || prev.respondentNames || "",
+        respondentAddress: resp.address || prev.respondentAddress || "",
+        defendantName: resp.name || prev.defendantName || "",
+        defendantAddress: resp.address || prev.defendantAddress || "",
+        accusedName: resp.name || prev.accusedName || "",
+        accusedAddress: resp.address || prev.accusedAddress || "",
+
+        // Generic client
+        clientName: firstClient.name || prev.clientName || "",
+        clientAddress: firstClient.address || prev.clientAddress || "",
+        clientPhone: firstClient.phone || prev.clientPhone || "",
+        clientFatherName: firstClient.fatherHusbandName || prev.clientFatherName || "",
       }));
     }
   };
+
+  // Close case dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (caseDropdownRef.current && !caseDropdownRef.current.contains(e.target as Node)) {
+        setCaseDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const filteredCasesForDropdown = cases.filter((c) => {
+    if (!caseSearch) return true;
+    const q = caseSearch.toLowerCase();
+    return (
+      c.caseNumber.toLowerCase().includes(q) ||
+      c.title.toLowerCase().includes(q) ||
+      (c.courtName || "").toLowerCase().includes(q)
+    );
+  }).slice(0, 50);
 
   const handleGeneratePreview = async () => {
     if (!selectedTemplate || !selectedCaseId) {
@@ -622,21 +719,58 @@ export default function CaseFilingPage() {
 
               <div className="space-y-2">
                 <Label>Link to Case *</Label>
-                <Select
-                  value={selectedCaseId}
-                  onValueChange={(v: any) => handleCaseSelectForGenerate(v)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a case" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {cases.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.caseNumber} - {c.title}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <div className="relative" ref={caseDropdownRef}>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      value={caseSearch}
+                      onChange={(e) => {
+                        setCaseSearch(e.target.value);
+                        setCaseDropdownOpen(true);
+                        if (!e.target.value) setSelectedCaseId("");
+                      }}
+                      onFocus={() => setCaseDropdownOpen(true)}
+                      placeholder="Search by case number, title, or court..."
+                      className="pl-9 pr-8"
+                    />
+                    {selectedCaseId && (
+                      <button
+                        type="button"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        onClick={() => {
+                          setCaseSearch("");
+                          setSelectedCaseId("");
+                          setVariableValues({});
+                          setCaseDropdownOpen(true);
+                        }}
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+                  {caseDropdownOpen && !selectedCaseId && (
+                    <div className="absolute z-50 mt-1 w-full max-h-60 overflow-auto rounded-md border bg-popover shadow-lg">
+                      {filteredCasesForDropdown.length === 0 ? (
+                        <div className="p-3 text-sm text-muted-foreground text-center">No cases found</div>
+                      ) : (
+                        filteredCasesForDropdown.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-accent cursor-pointer border-b last:border-b-0"
+                            onClick={() => handleCaseSelectForGenerate(c.id)}
+                          >
+                            <span className="font-medium">{c.caseNumber}</span>
+                            <span className="text-muted-foreground"> — {c.title}</span>
+                            {c.courtName && (
+                              <span className="text-xs text-muted-foreground block">{c.courtName}</span>
+                            )}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {templateVariables.length > 0 && (

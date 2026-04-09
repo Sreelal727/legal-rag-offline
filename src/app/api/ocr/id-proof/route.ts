@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { withAuth } from "@/lib/api-utils";
 import { parseIDText } from "@/lib/ocr/id-parser";
-import Tesseract from "tesseract.js";
 
 export async function POST(request: NextRequest) {
   const { error } = await withAuth("clients:write");
@@ -28,10 +27,31 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Run OCR with Tesseract.js
-    const { data } = await Tesseract.recognize(buffer, "eng", {
-      logger: () => {}, // suppress logs
+    // Run OCR with Tesseract.js — with timeout to prevent hanging
+    const TesseractModule = await import("tesseract.js");
+    const Tesseract = TesseractModule.default || TesseractModule;
+
+    const ocrPromise = Tesseract.recognize(buffer, "eng", {
+      logger: () => {},
     });
+
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("OCR_TIMEOUT")), 60000)
+    );
+
+    let data;
+    try {
+      const result = await Promise.race([ocrPromise, timeoutPromise]);
+      data = (result as any).data;
+    } catch (timeoutErr: any) {
+      if (timeoutErr?.message === "OCR_TIMEOUT") {
+        return NextResponse.json(
+          { error: "OCR processing timed out. The image may be too large or complex. Please try a smaller/clearer image." },
+          { status: 408 }
+        );
+      }
+      throw timeoutErr;
+    }
 
     const ocrText = data.text;
     const confidence = data.confidence;

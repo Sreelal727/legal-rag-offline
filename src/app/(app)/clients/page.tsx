@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Phone, Mail, Building2, User, Upload, FileCheck, Loader2, PenLine, Camera, SwitchCamera, MessageSquare } from "lucide-react";
+import { Plus, Search, Phone, Mail, Building2, User, Upload, FileCheck, Loader2, PenLine, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/role-gate";
 import Link from "next/link";
@@ -122,11 +122,7 @@ export default function ClientsPage() {
   const [form, setForm] = useState<FormState>({ ...emptyForm });
   const [scanResult, setScanResult] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const fileCameraRearRef = useRef<HTMLInputElement>(null);
-  const fileCameraFrontRef = useRef<HTMLInputElement>(null);
   const handwrittenInputRef = useRef<HTMLInputElement>(null);
-  const handwrittenCameraRearRef = useRef<HTMLInputElement>(null);
-  const handwrittenCameraFrontRef = useRef<HTMLInputElement>(null);
   const [scanningHandwritten, setScanningHandwritten] = useState(false);
 
   const fetchClients = useCallback(async () => {
@@ -156,10 +152,15 @@ export default function ClientsPage() {
       const formData = new FormData();
       formData.append("file", file);
 
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 90000);
+
       const res = await fetch("/api/ocr/id-proof", {
         method: "POST",
         body: formData,
+        signal: controller.signal,
       });
+      clearTimeout(timeout);
 
       if (!res.ok) {
         const err = await res.json();
@@ -201,15 +202,18 @@ export default function ClientsPage() {
         updateField("notes", noteLines.join("\n"));
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to process ID";
-      toast.error(message);
-      setScanResult("Scan failed — " + message);
+      if (err instanceof DOMException && err.name === "AbortError") {
+        toast.error("Scan timed out. Please try a smaller or clearer image.");
+        setScanResult("Scan timed out — try a smaller image");
+      } else {
+        const message = err instanceof Error ? err.message : "Failed to process ID";
+        toast.error(message);
+        setScanResult("Scan failed — " + message);
+      }
     } finally {
       setScanning(false);
-      // Reset file inputs so same file can be re-uploaded
+      // Reset file input so same file can be re-uploaded
       if (fileInputRef.current) fileInputRef.current.value = "";
-      if (fileCameraRearRef.current) fileCameraRearRef.current.value = "";
-      if (fileCameraFrontRef.current) fileCameraFrontRef.current.value = "";
     }
   };
 
@@ -224,10 +228,15 @@ export default function ClientsPage() {
       const formData = new FormData();
       formData.append("file", file);
 
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 90000);
+
       const res = await fetch("/api/ocr/handwritten", {
         method: "POST",
         body: formData,
+        signal: controller.signal,
       });
+      clearTimeout(timeout);
 
       if (!res.ok) {
         const err = await res.json();
@@ -271,14 +280,17 @@ export default function ClientsPage() {
         setScanResult((prev) => prev + " (partial extraction)");
       }
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Failed to process image";
-      toast.error(message);
-      setScanResult("Scan failed — " + message);
+      if (err instanceof DOMException && err.name === "AbortError") {
+        toast.error("Scan timed out. Please try a smaller or clearer image.");
+        setScanResult("Scan timed out — try a smaller image");
+      } else {
+        const message = err instanceof Error ? err.message : "Failed to process image";
+        toast.error(message);
+        setScanResult("Scan failed — " + message);
+      }
     } finally {
       setScanningHandwritten(false);
       if (handwrittenInputRef.current) handwrittenInputRef.current.value = "";
-      if (handwrittenCameraRearRef.current) handwrittenCameraRearRef.current.value = "";
-      if (handwrittenCameraFrontRef.current) handwrittenCameraFrontRef.current.value = "";
     }
   };
 
@@ -328,52 +340,20 @@ export default function ClientsPage() {
 
               {/* Smart Scan Section */}
               <div className="grid grid-cols-2 gap-6">
-                {/* ID Proof — hidden file inputs */}
+                {/* ID Proof — hidden file input */}
                 <input
                   ref={fileInputRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp,image/bmp"
-                  onChange={handleIDUpload}
-                  className="hidden"
-                />
-                <input
-                  ref={fileCameraRearRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  capture="environment"
-                  onChange={handleIDUpload}
-                  className="hidden"
-                />
-                <input
-                  ref={fileCameraFrontRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  capture="user"
+                  accept="image/jpeg,image/png,image/webp,image/bmp,image/tiff"
                   onChange={handleIDUpload}
                   className="hidden"
                 />
 
-                {/* Handwritten — hidden file inputs */}
+                {/* Handwritten — hidden file input */}
                 <input
                   ref={handwrittenInputRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp,image/bmp"
-                  onChange={handleHandwrittenUpload}
-                  className="hidden"
-                />
-                <input
-                  ref={handwrittenCameraRearRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  capture="environment"
-                  onChange={handleHandwrittenUpload}
-                  className="hidden"
-                />
-                <input
-                  ref={handwrittenCameraFrontRef}
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  capture="user"
+                  accept="image/jpeg,image/png,image/webp,image/bmp,image/tiff"
                   onChange={handleHandwrittenUpload}
                   className="hidden"
                 />
@@ -391,38 +371,16 @@ export default function ClientsPage() {
                       Scanning...
                     </div>
                   ) : (
-                    <div className="flex gap-1.5">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        disabled={scanning || scanningHandwritten}
-                        onClick={() => fileInputRef.current?.click()}
-                        title="Upload from gallery"
-                      >
-                        <Upload className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        disabled={scanning || scanningHandwritten}
-                        onClick={() => fileCameraRearRef.current?.click()}
-                        title="Rear camera"
-                      >
-                        <Camera className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        disabled={scanning || scanningHandwritten}
-                        onClick={() => fileCameraFrontRef.current?.click()}
-                        title="Front camera (selfie)"
-                      >
-                        <SwitchCamera className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={scanning || scanningHandwritten}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload ID
+                    </Button>
                   )}
                 </div>
 
@@ -439,38 +397,16 @@ export default function ClientsPage() {
                       Reading...
                     </div>
                   ) : (
-                    <div className="flex gap-1.5">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        disabled={scanning || scanningHandwritten}
-                        onClick={() => handwrittenInputRef.current?.click()}
-                        title="Upload from gallery"
-                      >
-                        <Upload className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        disabled={scanning || scanningHandwritten}
-                        onClick={() => handwrittenCameraRearRef.current?.click()}
-                        title="Rear camera"
-                      >
-                        <Camera className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        disabled={scanning || scanningHandwritten}
-                        onClick={() => handwrittenCameraFrontRef.current?.click()}
-                        title="Front camera (selfie)"
-                      >
-                        <SwitchCamera className="h-4 w-4" />
-                      </Button>
-                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={scanning || scanningHandwritten}
+                      onClick={() => handwrittenInputRef.current?.click()}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      Upload Image
+                    </Button>
                   )}
                 </div>
               </div>
