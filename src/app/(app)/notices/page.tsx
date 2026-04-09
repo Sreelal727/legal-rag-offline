@@ -17,6 +17,7 @@ import {
 import { Plus, FileSignature, Loader2, Sparkles, Eye, CheckCircle, XCircle, BookOpen } from "lucide-react";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/role-gate";
+import { DistrictSelector } from "@/components/district-selector";
 import { format } from "date-fns";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -76,6 +77,9 @@ export default function NoticesPage() {
   const [selectedNotice, setSelectedNotice] = useState<any>(null);
   const [viewOpen, setViewOpen] = useState(false);
   const [approveComment, setApproveComment] = useState("");
+  const [district, setDistrict] = useState("");
+  const [jurisdiction, setJurisdiction] = useState("");
+  const [policeStation, setPoliceStation] = useState("");
 
   const fetchNotices = useCallback(async () => {
     setLoading(true);
@@ -158,6 +162,7 @@ export default function NoticesPage() {
       setDraftCaseId("");
       setDraftClientId("");
       setDraftNoticeType("");
+      setDistrict(""); setJurisdiction(""); setPoliceStation("");
       fetchNotices();
     } else {
       toast.error("Failed to create notice");
@@ -276,6 +281,14 @@ export default function NoticesPage() {
                     </Select>
                   </div>
                 </div>
+                <DistrictSelector
+                  district={district}
+                  jurisdiction={jurisdiction}
+                  policeStation={policeStation}
+                  onDistrictChange={setDistrict}
+                  onJurisdictionChange={setJurisdiction}
+                  onPoliceStationChange={setPoliceStation}
+                />
                 <div className="space-y-2">
                   <Label htmlFor="draftTitle">Title</Label>
                   <Input

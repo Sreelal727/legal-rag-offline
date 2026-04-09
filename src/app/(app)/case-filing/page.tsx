@@ -36,6 +36,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/role-gate";
+import { DistrictSelector } from "@/components/district-selector";
 
 const DOC_TYPES = [
   "PLAINT", "RCP", "GOP", "SOP", "SARFAESI", "NI_ACT_138", "CAVEAT",
@@ -123,6 +124,11 @@ export default function CaseFilingPage() {
   const [caseDropdownOpen, setCaseDropdownOpen] = useState(false);
   const caseDropdownRef = useRef<HTMLDivElement>(null);
 
+  // District selector
+  const [district, setDistrict] = useState("");
+  const [jurisdiction, setJurisdiction] = useState("");
+  const [policeStation, setPoliceStation] = useState("");
+
   // Filter
   const [statusFilter, setStatusFilter] = useState("ALL");
 
@@ -189,6 +195,9 @@ export default function CaseFilingPage() {
     setPreviewContent("");
     setShowPreview(false);
     setDocTitle(`${template.name}`);
+    setDistrict("");
+    setJurisdiction("");
+    setPoliceStation("");
     setGenOpen(true);
   };
 
@@ -772,6 +781,18 @@ export default function CaseFilingPage() {
                   )}
                 </div>
               </div>
+
+              <DistrictSelector
+                district={district}
+                jurisdiction={jurisdiction}
+                policeStation={policeStation}
+                onDistrictChange={setDistrict}
+                onJurisdictionChange={(v) => {
+                  setJurisdiction(v);
+                  if (v) setVariableValues((prev) => ({ ...prev, courtName: v }));
+                }}
+                onPoliceStationChange={setPoliceStation}
+              />
 
               {templateVariables.length > 0 && (
                 <div className="space-y-3">
