@@ -15,6 +15,7 @@ import {
 import { Upload, Search, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/role-gate";
+import { DistrictSelector } from "@/components/district-selector";
 import { format } from "date-fns";
 
 interface Doc {
@@ -46,6 +47,9 @@ export default function DocumentsPage() {
   const [selectedCaseId, setSelectedCaseId] = useState("");
   const [loading, setLoading] = useState(true);
   const [processing, setProcessing] = useState<string | null>(null);
+  const [district, setDistrict] = useState("");
+  const [jurisdiction, setJurisdiction] = useState("");
+  const [policeStation, setPoliceStation] = useState("");
 
   const fetchDocuments = useCallback(async () => {
     setLoading(true);
@@ -81,6 +85,7 @@ export default function DocumentsPage() {
       toast.success("Document uploaded");
       setOpen(false);
       setSelectedCaseId("");
+      setDistrict(""); setJurisdiction(""); setPoliceStation("");
       fetchDocuments();
     } else {
       toast.error("Upload failed");
@@ -164,6 +169,14 @@ export default function DocumentsPage() {
                     </SelectContent>
                   </Select>
                 </div>
+                <DistrictSelector
+                  district={district}
+                  jurisdiction={jurisdiction}
+                  policeStation={policeStation}
+                  onDistrictChange={setDistrict}
+                  onJurisdictionChange={setJurisdiction}
+                  onPoliceStationChange={setPoliceStation}
+                />
                 <Button type="submit" className="w-full">Upload</Button>
               </form>
             </DialogContent>

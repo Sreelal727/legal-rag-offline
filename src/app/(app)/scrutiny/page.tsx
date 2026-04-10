@@ -16,6 +16,7 @@ import {
 import { Plus, Search, Loader2, SearchCheck, Building2, MapPin } from "lucide-react";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/role-gate";
+import { DistrictSelector } from "@/components/district-selector";
 import { format } from "date-fns";
 
 interface ScrutinyReport {
@@ -59,6 +60,9 @@ export default function ScrutinyPage() {
     borrowerName: "",
     propertyAddress: "",
   });
+  const [district, setDistrict] = useState("");
+  const [jurisdiction, setJurisdiction] = useState("");
+  const [policeStation, setPoliceStation] = useState("");
 
   const fetchReports = useCallback(async () => {
     try {
@@ -99,6 +103,7 @@ export default function ScrutinyPage() {
       toast.success("Report created");
       setOpen(false);
       setForm({ title: "", referenceNumber: "", bankName: "", branchName: "", borrowerName: "", propertyAddress: "" });
+      setDistrict(""); setJurisdiction(""); setPoliceStation("");
       router.push(`/scrutiny/${report.id}`);
     } catch (err: any) {
       toast.error(err.message || "Failed to create report");
@@ -168,6 +173,14 @@ export default function ScrutinyPage() {
                     />
                   </div>
                 </div>
+                <DistrictSelector
+                  district={district}
+                  jurisdiction={jurisdiction}
+                  policeStation={policeStation}
+                  onDistrictChange={setDistrict}
+                  onJurisdictionChange={setJurisdiction}
+                  onPoliceStationChange={setPoliceStation}
+                />
                 <div>
                   <Label>Property Address</Label>
                   <Input

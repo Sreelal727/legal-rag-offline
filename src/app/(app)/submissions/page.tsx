@@ -37,6 +37,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/role-gate";
+import { DistrictSelector } from "@/components/district-selector";
 import { format } from "date-fns";
 import { useRef } from "react";
 
@@ -173,6 +174,9 @@ export default function SubmissionsPage() {
   const [clientSearch, setClientSearch] = useState("");
   const [caseDropdownOpen, setCaseDropdownOpen] = useState(false);
   const [clientDropdownOpen, setClientDropdownOpen] = useState(false);
+  const [district, setDistrict] = useState("");
+  const [jurisdiction, setJurisdiction] = useState("");
+  const [policeStation, setPoliceStation] = useState("");
   const caseInputRef = useRef<HTMLInputElement>(null);
   const clientInputRef = useRef<HTMLInputElement>(null);
 
@@ -403,6 +407,9 @@ export default function SubmissionsPage() {
                 setClientSearch("");
                 setCaseDropdownOpen(false);
                 setClientDropdownOpen(false);
+                setDistrict("");
+                setJurisdiction("");
+                setPoliceStation("");
               }
             }}>
             <DialogTrigger asChild>
@@ -581,6 +588,17 @@ export default function SubmissionsPage() {
                     </Select>
                   </div>
                 </div>
+                <DistrictSelector
+                  district={district}
+                  jurisdiction={jurisdiction}
+                  policeStation={policeStation}
+                  onDistrictChange={setDistrict}
+                  onJurisdictionChange={(v) => { setJurisdiction(v); if (v) setAutoCourtName(v); }}
+                  onPoliceStationChange={setPoliceStation}
+                />
+                <input type="hidden" name="district" value={district} />
+                <input type="hidden" name="jurisdiction" value={jurisdiction} />
+                <input type="hidden" name="policeStation" value={policeStation} />
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="dueDate">Due Date</Label>
