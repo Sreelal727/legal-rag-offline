@@ -21,11 +21,43 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Phone, Mail, Building2, User, Upload, FileCheck, Loader2, PenLine, MessageSquare } from "lucide-react";
+import { Plus, Search, Phone, Mail, Building2, User, Upload, FileCheck, Loader2, PenLine, MessageSquare, FileText, CheckCircle, XCircle, Users, Scale } from "lucide-react";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/role-gate";
 import Link from "next/link";
 import { WhatsAppMessageDialog } from "@/components/whatsapp-message-dialog";
+
+interface DocumentAnalysis {
+  documentType: string;
+  caseType: string;
+  caseNumber?: string;
+  courtName?: string;
+  plaintiff: {
+    name: string;
+    type: string;
+    branchName?: string;
+    address?: string;
+    representedBy?: string;
+    isClient: boolean;
+  };
+  defendants: Array<{
+    name: string;
+    type: string;
+    fatherHusbandName?: string;
+    designation?: string;
+    age?: number;
+    address?: string;
+    phone?: string;
+    aadharNumber?: string;
+    loanAccountNumber?: string;
+    partyRole: string;
+  }>;
+  suitValue?: number;
+  loanAmount?: number;
+  reliefSought?: string;
+  summary?: string;
+  confidence: string;
+}
 
 const CLIENT_TYPES = ["INDIVIDUAL", "COMPANY", "GOVERNMENT", "OTHER"];
 
@@ -124,6 +156,11 @@ export default function ClientsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const handwrittenInputRef = useRef<HTMLInputElement>(null);
   const [scanningHandwritten, setScanningHandwritten] = useState(false);
+  const [docScanOpen, setDocScanOpen] = useState(false);
+  const [docScanning, setDocScanning] = useState(false);
+  const [docAnalysis, setDocAnalysis] = useState<DocumentAnalysis | null>(null);
+  const [docSaving, setDocSaving] = useState(false);
+  const docFileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchClients = useCallback(async () => {
     setLoading(true);
@@ -294,6 +331,83 @@ export default function ClientsPage() {
     }
   };
 
+  const handleDocScan = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setDocScanning(true);
+    setDocAnalysis(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 120000);
+
+      const res = await fetch("/api/documents/analyze-parties", {
+        method: "POST",
+        body: formData,
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Document analysis failed");
+      }
+
+      const data = await res.json();
+      setDocAnalysis(data.analysis);
+      toast.success("Document analyzed successfully");
+    } catch (err: unknown) {
+      if (err instanceof DOMException && err.name === "AbortError") {
+        toast.error("Analysis timed out. Try a smaller document.");
+      } else {
+        const message = err instanceof Error ? err.message : "Failed to analyze document";
+        toast.error(message);
+      }
+    } finally {
+      setDocScanning(false);
+      if (docFileInputRef.current) docFileInputRef.current.value = "";
+    }
+  };
+
+  const handleSaveAnalysis = async () => {
+    if (!docAnalysis) return;
+
+    setDocSaving(true);
+    try {
+      const res = await fetch("/api/documents/analyze-parties", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          plaintiff: docAnalysis.plaintiff,
+          defendants: docAnalysis.defendants,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        const created = data.results.clients.filter((c: any) => c._status === "created").length;
+        const existing = data.results.clients.filter((c: any) => c._status === "existing").length;
+        toast.success(
+          `Client: ${created ? "created" : "already exists"}. ` +
+          `${data.results.oppositeParties.length} opposition(s) noted.`
+        );
+        setDocScanOpen(false);
+        setDocAnalysis(null);
+        fetchClients();
+      } else {
+        toast.error("Failed to save party information");
+      }
+    } catch {
+      toast.error("Failed to save party information");
+    } finally {
+      setDocSaving(false);
+    }
+  };
+
   const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const res = await fetch("/api/clients", {
@@ -318,6 +432,170 @@ export default function ClientsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">Clients</h1>
         <RoleGate permission="clients:write">
+          <div className="flex gap-2">
+            {/* Scan Legal Document Button */}
+            <Dialog
+              open={docScanOpen}
+              onOpenChange={(v) => {
+                setDocScanOpen(v);
+                if (!v) setDocAnalysis(null);
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Scale className="mr-2 h-4 w-4" /> Scan Legal Document
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>Scan Legal Document</DialogTitle>
+                </DialogHeader>
+                <p className="text-sm text-muted-foreground">
+                  Upload a plaint, petition, notice, or any legal document. The system will analyze
+                  it and identify the <strong>client</strong> (plaintiff/petitioner) and{" "}
+                  <strong>opposition</strong> (defendant/respondent) automatically.
+                </p>
+
+                <input
+                  ref={docFileInputRef}
+                  type="file"
+                  accept=".doc,.docx,.pdf,.txt,.rtf"
+                  onChange={handleDocScan}
+                  className="hidden"
+                />
+
+                {!docAnalysis && (
+                  <div className="rounded-lg border-2 border-dashed border-muted-foreground/25 p-8 text-center space-y-3">
+                    <FileText className="h-8 w-8 mx-auto text-muted-foreground" />
+                    <p className="text-sm font-medium">Upload Legal Document</p>
+                    <p className="text-xs text-muted-foreground">
+                      Supports .doc, .docx, .pdf, .txt, .rtf
+                    </p>
+                    {docScanning ? (
+                      <div className="flex items-center justify-center gap-2 py-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Analyzing document...
+                      </div>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => docFileInputRef.current?.click()}
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        Choose File
+                      </Button>
+                    )}
+                  </div>
+                )}
+
+                {docAnalysis && (
+                  <div className="space-y-4">
+                    {/* Analysis Summary */}
+                    <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-semibold text-sm">Document Analysis</h3>
+                        <Badge variant={docAnalysis.confidence === "HIGH" ? "default" : "secondary"}>
+                          {docAnalysis.confidence} confidence
+                        </Badge>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div><span className="text-muted-foreground">Type:</span> {docAnalysis.documentType}</div>
+                        <div><span className="text-muted-foreground">Case:</span> {docAnalysis.caseType} {docAnalysis.caseNumber || ""}</div>
+                        {docAnalysis.courtName && <div className="col-span-2"><span className="text-muted-foreground">Court:</span> {docAnalysis.courtName}</div>}
+                        {docAnalysis.suitValue && <div><span className="text-muted-foreground">Suit Value:</span> Rs.{docAnalysis.suitValue?.toLocaleString("en-IN")}</div>}
+                        {docAnalysis.loanAmount && <div><span className="text-muted-foreground">Loan Amount:</span> Rs.{docAnalysis.loanAmount?.toLocaleString("en-IN")}</div>}
+                      </div>
+                      {docAnalysis.summary && (
+                        <p className="text-xs text-muted-foreground mt-1">{docAnalysis.summary}</p>
+                      )}
+                    </div>
+
+                    {/* Plaintiff / Client */}
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800 p-4 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle className="h-4 w-4 text-emerald-600" />
+                        <h3 className="font-semibold text-sm text-emerald-700 dark:text-emerald-400">
+                          CLIENT (Plaintiff/Petitioner)
+                        </h3>
+                        <Badge variant="outline" className="text-emerald-600 border-emerald-300">
+                          {docAnalysis.plaintiff.type}
+                        </Badge>
+                      </div>
+                      <div className="text-sm space-y-1">
+                        <p className="font-medium">{docAnalysis.plaintiff.name}</p>
+                        {docAnalysis.plaintiff.branchName && (
+                          <p className="text-muted-foreground">Branch: {docAnalysis.plaintiff.branchName}</p>
+                        )}
+                        {docAnalysis.plaintiff.address && (
+                          <p className="text-muted-foreground text-xs">{docAnalysis.plaintiff.address}</p>
+                        )}
+                        {docAnalysis.plaintiff.representedBy && (
+                          <p className="text-xs text-muted-foreground">Counsel: {docAnalysis.plaintiff.representedBy}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Defendants / Opposition */}
+                    <div className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-950/20 dark:border-red-800 p-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Users className="h-4 w-4 text-red-600" />
+                        <h3 className="font-semibold text-sm text-red-700 dark:text-red-400">
+                          OPPOSITION ({docAnalysis.defendants.length} Defendant{docAnalysis.defendants.length !== 1 ? "s" : ""}/Respondent{docAnalysis.defendants.length !== 1 ? "s" : ""})
+                        </h3>
+                      </div>
+                      <div className="space-y-2">
+                        {docAnalysis.defendants.map((def, i) => (
+                          <div key={i} className="text-sm border-b border-red-100 dark:border-red-900 pb-2 last:border-0 last:pb-0">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground w-4">{i + 1}.</span>
+                              <span className="font-medium">{def.name}</span>
+                              <Badge variant="outline" className="text-xs text-red-600 border-red-300">
+                                {def.partyRole}
+                              </Badge>
+                            </div>
+                            <div className="ml-6 text-xs text-muted-foreground space-y-0.5">
+                              {def.fatherHusbandName && (
+                                <p>{def.designation || "S/o"} {def.fatherHusbandName}{def.age ? `, Age: ${def.age}` : ""}</p>
+                              )}
+                              {def.address && <p>{def.address}</p>}
+                              {def.phone && <p>Phone: {def.phone}</p>}
+                              {def.loanAccountNumber && <p>Loan A/c: {def.loanAccountNumber}</p>}
+                              {def.aadharNumber && <p>Aadhaar: {def.aadharNumber}</p>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex gap-2">
+                      <Button
+                        onClick={handleSaveAnalysis}
+                        disabled={docSaving}
+                        className="flex-1"
+                      >
+                        {docSaving ? (
+                          <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
+                        ) : (
+                          <><CheckCircle className="h-4 w-4 mr-2" /> Save Client & Opposition</>
+                        )}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        onClick={() => {
+                          setDocAnalysis(null);
+                          docFileInputRef.current?.click();
+                        }}
+                      >
+                        Scan Another
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
+
           <Dialog
             open={open}
             onOpenChange={(v) => {
@@ -644,6 +922,7 @@ export default function ClientsPage() {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </RoleGate>
       </div>
 

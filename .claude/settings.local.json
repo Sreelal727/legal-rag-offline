@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(file \"D:\\\\anadhakrishnan\\\\DBASE\"/*)",
+      "Bash(antiword \"D:/anadhakrishnan/Documents/PLAINTS 28.5.2024/PNY/Olavakkode/2019/Aneesh/Plaint.doc\")",
+      "Bash(antiword \"D:/anadhakrishnan/Documents/PLAINTS 28.5.2024/PNY/Vadakkenchery/2020/Arun/Plaint.doc\")",
+      "Bash(antiword \"D:/anadhakrishnan/Documents/2022 8.4.23/2022/2022/Plaint.doc\")",
+      "Bash(antiword \"D:/anadhakrishnan/Documents/PLAINTS 28.5.2024/PNY/Kongad/2025/Dhanalakshmi JLG/Plaint.doc\")"
+    ]
+  }
+}
