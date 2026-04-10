@@ -12,21 +12,31 @@ export async function GET(request: NextRequest) {
   const page = parseInt(searchParams.get("page") || "1");
   const limit = parseInt(searchParams.get("limit") || "20");
 
+  // showAll=true allows viewing inactive (opposition) clients for reference
+  const showAll = searchParams.get("showAll") === "true";
+
   const where = search
     ? {
         organizationId,
+        ...(showAll ? {} : { isActive: true }),
         OR: [
           { name: { contains: search } },
           { email: { contains: search } },
           { phone: { contains: search } },
         ],
       }
-    : { organizationId };
+    : {
+        organizationId,
+        ...(showAll ? {} : { isActive: true }),
+      };
 
   const [clients, total] = await Promise.all([
     prisma.client.findMany({
       where,
-      orderBy: { createdAt: "desc" },
+      orderBy: [
+        { caseClients: { _count: "desc" } },
+        { name: "asc" },
+      ],
       skip: (page - 1) * limit,
       take: limit,
       include: {
