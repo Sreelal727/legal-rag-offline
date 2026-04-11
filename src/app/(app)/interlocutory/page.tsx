@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/role-gate";
+import { useSession } from "next-auth/react";
 import { format } from "date-fns";
 
 const IA_TYPES = [
@@ -87,6 +88,7 @@ interface CaseTemplate {
 }
 
 export default function InterlocutoryPage() {
+  const { data: session } = useSession();
   const [documents, setDocuments] = useState<CaseDocument[]>([]);
   const [templates, setTemplates] = useState<CaseTemplate[]>([]);
   const [cases, setCases] = useState<any[]>([]);
@@ -95,6 +97,8 @@ export default function InterlocutoryPage() {
   const [genOpen, setGenOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<CaseTemplate | null>(null);
   const [selectedCaseId, setSelectedCaseId] = useState("");
+  const [selectedCaseData, setSelectedCaseData] = useState<any>(null);
+  const [fetchingCase, setFetchingCase] = useState(false);
   const [variableValues, setVariableValues] = useState<Record<string, string>>({});
   const [previewContent, setPreviewContent] = useState("");
   const [showPreview, setShowPreview] = useState(false);
@@ -146,6 +150,7 @@ export default function InterlocutoryPage() {
   const openGen = (template: CaseTemplate) => {
     setSelectedTemplate(template);
     setSelectedCaseId("");
+    setSelectedCaseData(null);
     setVariableValues({});
     setPreviewContent("");
     setShowPreview(false);
@@ -154,18 +159,56 @@ export default function InterlocutoryPage() {
     setGenOpen(true);
   };
 
-  const handleCaseSelect = (caseId: string) => {
+  const handleCaseSelect = async (caseId: string) => {
     setSelectedCaseId(caseId);
-    const c = cases.find((x) => x.id === caseId);
-    if (c) {
+    setFetchingCase(true);
+    try {
+      const res = await fetch(`/api/cases/${caseId}`);
+      const c = await res.json();
+      setSelectedCaseData(c);
+
+      const firstClient = c.caseClients?.[0]?.client;
+      const allOPs = c.oppositeParties || [];
+      const firstOP = allOPs[0];
+      const filingYear = c.filingDate
+        ? new Date(c.filingDate).getFullYear().toString()
+        : new Date().getFullYear().toString();
+
+      // Build respondents string (all opposite party names joined)
+      const respondentStr = allOPs.length > 1
+        ? allOPs.map((op: any, i: number) => `${i + 1}. ${op.name}`).join("\n")
+        : firstOP?.name || "";
+
       setVariableValues((prev) => ({
         ...prev,
         courtName: c.courtName || "",
         caseNumber: c.caseNumber || "",
-        year: new Date().getFullYear().toString(),
+        caseType: c.caseSubType || c.caseType || "",
+        year: filingYear,
         date: format(new Date(), "dd/MM/yyyy"),
-        place: c.courtName || "",
+        place: "Palakkad",
+        petitionerName: firstClient?.name || "",
+        applicantName: firstClient?.name || "",
+        applicantRole: "Petitioner",
+        respondentName: respondentStr,
+        advocateName: session?.user?.name || "G. Ananthakrishnan",
       }));
+    } catch {
+      // fallback to list data
+      const c = cases.find((x) => x.id === caseId);
+      if (c) {
+        setVariableValues((prev) => ({
+          ...prev,
+          courtName: c.courtName || "",
+          caseNumber: c.caseNumber || "",
+          caseType: c.caseType || "",
+          year: new Date().getFullYear().toString(),
+          date: format(new Date(), "dd/MM/yyyy"),
+          place: "Palakkad",
+        }));
+      }
+    } finally {
+      setFetchingCase(false);
     }
   };
 
@@ -425,7 +468,7 @@ export default function InterlocutoryPage() {
           {!showPreview ? (
             <div className="space-y-4">
               {/* Case Selection */}
-              <div>
+              <div className="space-y-2">
                 <Label>Select Case *</Label>
                 <Select value={selectedCaseId} onValueChange={(v: any) => handleCaseSelect(String(v || ""))}>
                   <SelectTrigger>
@@ -439,6 +482,19 @@ export default function InterlocutoryPage() {
                     ))}
                   </SelectContent>
                 </Select>
+                {fetchingCase && (
+                  <p className="text-xs text-muted-foreground">Loading case details...</p>
+                )}
+                {selectedCaseData && !fetchingCase && (
+                  <div className="rounded-md bg-muted/50 border px-3 py-2 text-xs space-y-0.5">
+                    <p><span className="font-medium">Petitioner:</span> {selectedCaseData.caseClients?.[0]?.client?.name || "—"}</p>
+                    <p><span className="font-medium">Respondents:</span> {(selectedCaseData.oppositeParties || []).map((op: any) => op.name).join(", ") || "—"}</p>
+                    <p><span className="font-medium">Court:</span> {selectedCaseData.courtName || "—"} &nbsp;|&nbsp; <span className="font-medium">Filed:</span> {selectedCaseData.filingDate ? format(new Date(selectedCaseData.filingDate), "dd/MM/yyyy") : "—"}</p>
+                    {selectedCaseData.suitValue && (
+                      <p><span className="font-medium">Suit Value:</span> ₹{selectedCaseData.suitValue.toLocaleString("en-IN")}</p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Document Title */}
