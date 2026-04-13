@@ -1921,5 +1921,189 @@ Date: {{date}}
   },
 ];
 
+// ─── Annexure Templates ───────────────────────────────────────────────────────
+
+export const ANNEXURE_TEMPLATES = [
+  {
+    name: "Vakkalath (Vakalathnama)",
+    category: "ANNEXURE",
+    documentType: "VAKKALATH",
+    description: "Authorization given by client to advocate to represent in court",
+    courtType: null,
+    variables: JSON.stringify([
+      "courtName", "caseNumber", "caseType", "year",
+      "petitionerName", "respondentName",
+      "clientName", "clientDesignation", "clientFatherName", "clientAge", "clientAddress",
+      "advocateName", "barCouncilNumber", "date", "place",
+    ]),
+    content: `IN THE COURT OF {{courtName}}
+
+{{caseType}} No. {{caseNumber}} of {{year}}
+
+{{petitionerName}}
+                                        ... PLAINTIFF/PETITIONER
+        VERSUS
+{{respondentName}}
+                                        ... DEFENDANT/RESPONDENT
+
+VAKALATHNAMA
+
+I/We, {{clientName}}, {{clientDesignation}} {{clientFatherName}}, aged about {{clientAge}} years, residing at {{clientAddress}}, the Plaintiff/Petitioner in the above case, do hereby appoint and authorize Sri/Smt. {{advocateName}}, Advocate (Bar Council No. {{barCouncilNumber}}), Palakkad, to act, appear and plead on my/our behalf in the above case and all connected proceedings including interlocutory applications, execution proceedings, appeals and any other proceedings arising therefrom.
+
+I/We hereby authorize the said advocate to:
+(a) File, present, sign and verify all plaints, petitions, applications and other documents on my/our behalf;
+(b) To examine, cross-examine and re-examine witnesses;
+(c) To receive on my/our behalf all documents, processes, notices and orders;
+(d) To compromise, refer to arbitration, withdraw, give receipts and do all such acts as may be necessary.
+
+I/We agree to ratify and confirm all acts done by the said advocate in the above proceedings.
+
+Dated this {{date}} at {{place}}.
+
+                                        Signature/Thumb Impression
+                                        {{clientName}}
+                                        (Plaintiff/Petitioner)
+
+Witness:
+1. ______________________
+2. ______________________
+
+I, {{advocateName}}, Advocate, do hereby accept the above Vakkalath.
+
+                                        {{advocateName}}
+                                        Advocate`,
+  },
+  {
+    name: "Ledger Certificate (Bank)",
+    category: "ANNEXURE",
+    documentType: "LEDGER_CERTIFICATE",
+    description: "Bank ledger certificate showing outstanding loan account details",
+    courtType: null,
+    variables: JSON.stringify([
+      "bankName", "branchName",
+      "borrowerName", "loanAccountNumber", "loanType",
+      "sanctionedAmount", "sanctionDate",
+      "principalBalance", "interestBalance", "otherCharges", "totalDues",
+      "interestRate", "npaDate", "statementDate",
+      "authorizedSignatory", "date", "place",
+    ]),
+    content: `LEDGER CERTIFICATE
+
+{{bankName}}
+{{branchName}}
+
+Date: {{date}}
+
+This is to certify that the following is a true extract from the books of account/ledger of this Bank in respect of the loan account of:
+
+Account Holder(s): {{borrowerName}}
+Account / Loan Number: {{loanAccountNumber}}
+Nature of Loan / Facility: {{loanType}}
+Sanctioned Amount: Rs. {{sanctionedAmount}}/-
+Date of Sanction: {{sanctionDate}}
+Rate of Interest: {{interestRate}}% per annum (with monthly/quarterly rests)
+
+OUTSTANDING AS ON {{statementDate}}:
+
+1. Principal Outstanding:              Rs. {{principalBalance}}/-
+2. Interest (including overdue):       Rs. {{interestBalance}}/-
+3. Other Charges / Expenses:           Rs. {{otherCharges}}/-
+                                       ─────────────────────────
+   TOTAL DUES:                         Rs. {{totalDues}}/-
+
+The account has been classified as Non-Performing Asset (NPA) with effect from {{npaDate}}.
+
+This certificate is issued for the purpose of filing of suit / legal proceedings at the instance of our advocates and is true and correct to the best of our knowledge and belief.
+
+Place: {{place}}
+
+                                        {{authorizedSignatory}}
+                                        Authorized Signatory
+                                        {{bankName}}, {{branchName}}`,
+  },
+  {
+    name: "Summons to Defendant",
+    category: "ANNEXURE",
+    documentType: "SUMMONS",
+    description: "Court summons to be served on defendants/respondents",
+    courtType: null,
+    variables: JSON.stringify([
+      "courtName", "caseNumber", "caseType", "year",
+      "petitionerName", "respondentName", "respondentAddress",
+      "reliefSought", "hearingDate", "date", "place",
+    ]),
+    content: `IN THE COURT OF {{courtName}}
+
+{{caseType}} No. {{caseNumber}} of {{year}}
+
+{{petitionerName}}                              ... PLAINTIFF/PETITIONER
+        VERSUS
+{{respondentName}}                              ... DEFENDANT/RESPONDENT
+
+SUMMONS
+
+To,
+{{respondentName}},
+{{respondentAddress}}.
+
+WHEREAS the Plaintiff/Petitioner above named has instituted a suit/petition against you in the above Court for:
+{{reliefSought}}
+
+YOU ARE HEREBY SUMMONED to appear before this Court on {{hearingDate}} at [    ] AM / PM, in person or by a duly authorised pleader/advocate, to answer the claim of the Plaintiff/Petitioner and to file your Written Statement of defence, if any, to the suit on that date.
+
+TAKE NOTICE that in default of your appearance on the said date, the case will be heard and determined in your absence.
+
+Given under my hand and the seal of this Court this {{date}}.
+
+                                        [SEAL OF THE COURT]
+
+                                        Registrar / Sheristadar
+                                        {{courtName}}
+
+Note: Documents relied upon by the Plaintiff are available for inspection at the office of the undersigned.`,
+  },
+  {
+    name: "Batta Memo",
+    category: "ANNEXURE",
+    documentType: "BATTA_MEMO",
+    description: "Batta memo for service charges on summons/notices",
+    courtType: null,
+    variables: JSON.stringify([
+      "courtName", "caseNumber", "caseType", "year",
+      "petitionerName", "respondentName",
+      "serveeName", "serveeAddress", "serviceMode",
+      "battaAmount", "totalBatta",
+      "advocateName", "date", "place",
+    ]),
+    content: `IN THE COURT OF {{courtName}}
+
+{{caseType}} No. {{caseNumber}} of {{year}}
+
+{{petitionerName}}                              ... PLAINTIFF/PETITIONER
+        VERSUS
+{{respondentName}}                              ... DEFENDANT/RESPONDENT
+
+BATTA MEMO
+
+The Plaintiff/Petitioner hereby submits batta for service of summons/notice on the Defendant(s)/Respondent(s):
+
+Sl. No. | Name & Address                          | Mode of Service     | Batta (Rs.)
+--------|------------------------------------------|---------------------|-------------
+1.      | {{serveeName}}                           | {{serviceMode}}     | {{battaAmount}}/-
+        | {{serveeAddress}}                        |                     |
+        |                                          |                     |
+        |                                          | Total Batta:        | Rs. {{totalBatta}}/-
+
+Note: Process fee paid separately.
+
+Date: {{date}}
+Place: {{place}}
+
+                                        PLAINTIFF/PETITIONER
+                                        Through Advocate
+                                        {{advocateName}}`,
+  },
+];
+
 // Combined export of all templates for seeding
-export const ALL_TEMPLATES = [...COURT_TEMPLATES, ...IA_TEMPLATES, ...EP_TEMPLATES];
+export const ALL_TEMPLATES = [...COURT_TEMPLATES, ...IA_TEMPLATES, ...EP_TEMPLATES, ...ANNEXURE_TEMPLATES];

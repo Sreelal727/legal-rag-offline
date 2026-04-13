@@ -33,6 +33,8 @@ import {
   Database,
   Search,
   X,
+  Layers,
+  Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/role-gate";
@@ -131,6 +133,14 @@ export default function CaseFilingPage() {
 
   // Filter
   const [statusFilter, setStatusFilter] = useState("ALL");
+
+  // Batch annexure generation
+  const [annexureOpen, setAnnexureOpen] = useState(false);
+  const [annexureSourceDoc, setAnnexureSourceDoc] = useState<CaseDocument | null>(null);
+  const [annexureTemplates, setAnnexureTemplates] = useState<CaseTemplate[]>([]);
+  const [selectedAnnexures, setSelectedAnnexures] = useState<string[]>([]);
+  const [batchGenerating, setBatchGenerating] = useState(false);
+  const [batchResults, setBatchResults] = useState<{ name: string; ok: boolean }[]>([]);
 
   const fetchTemplates = useCallback(async () => {
     const res = await fetch("/api/case-templates");
@@ -460,6 +470,72 @@ export default function CaseFilingPage() {
 
   const caseFilingTemplates = templates.filter((t) => t.category === "CASE_FILING");
   const affidavitTemplates = templates.filter((t) => t.category === "AFFIDAVIT");
+  const annexureCategoryTemplates = templates.filter((t) => t.category === "ANNEXURE");
+
+  // Default annexure selection: all AFFIDAVIT + ANNEXURE templates
+  const ANNEXURE_DOC_TYPES = [
+    "FACT_AFFIDAVIT", "VERIFICATION_AFFIDAVIT", "STATEMENT_OF_TRUTH",
+    "VAKKALATH", "LEDGER_CERTIFICATE", "SUMMONS", "BATTA_MEMO",
+  ];
+
+  const openAnnexureDialog = async (doc: CaseDocument) => {
+    setAnnexureSourceDoc(doc);
+    setBatchResults([]);
+    // Fetch annexure + affidavit templates
+    const res = await fetch("/api/case-templates");
+    const data = await res.json();
+    const allTpls: CaseTemplate[] = data.templates || [];
+    const annexureTpls = allTpls.filter((t) =>
+      ANNEXURE_DOC_TYPES.includes(t.documentType)
+    );
+    setAnnexureTemplates(annexureTpls);
+    setSelectedAnnexures(annexureTpls.map((t) => t.documentType));
+    setAnnexureOpen(true);
+  };
+
+  const handleBatchGenerate = async () => {
+    if (!annexureSourceDoc || selectedAnnexures.length === 0) return;
+    setBatchGenerating(true);
+    setBatchResults([]);
+    const results: { name: string; ok: boolean }[] = [];
+
+    for (const docType of selectedAnnexures) {
+      const tpl = annexureTemplates.find((t) => t.documentType === docType);
+      if (!tpl) continue;
+      try {
+        // Create document
+        const createRes = await fetch("/api/case-documents", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            caseId: annexureSourceDoc.caseId,
+            documentType: tpl.documentType,
+            title: tpl.name,
+            content: "Generating...",
+            templateId: tpl.id,
+          }),
+        });
+        if (!createRes.ok) { results.push({ name: tpl.name, ok: false }); continue; }
+        const created = await createRes.json();
+
+        // Generate with case data auto-fill
+        const genRes = await fetch(`/api/case-documents/${created.id}/generate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ templateId: tpl.id, variables: {} }),
+        });
+        results.push({ name: tpl.name, ok: genRes.ok });
+      } catch {
+        results.push({ name: tpl?.name || docType, ok: false });
+      }
+    }
+
+    setBatchResults(results);
+    setBatchGenerating(false);
+    fetchDocuments();
+    const ok = results.filter((r) => r.ok).length;
+    toast.success(`Generated ${ok} of ${results.length} annexures`);
+  };
 
   return (
     <div className="space-y-6">
@@ -501,6 +577,38 @@ export default function CaseFilingPage() {
             </Card>
           ) : (
             <>
+              {/* Annexure Templates */}
+              {annexureCategoryTemplates.length > 0 && (
+                <div>
+                  <h2 className="text-lg font-semibold mb-3">Annexure Templates</h2>
+                  <p className="text-xs text-muted-foreground mb-3">
+                    Vakkalath, Ledger Certificate, Summons, Batta — generate individually or use the{" "}
+                    <Layers className="inline h-3 w-3" /> button on any Plaint to batch-generate all at once.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {annexureCategoryTemplates.map((template) => (
+                      <Card
+                        key={template.id}
+                        className="cursor-pointer hover:shadow-md transition-shadow"
+                        onClick={() => openGenerateDialog(template)}
+                      >
+                        <CardContent className="p-4">
+                          <div className="flex items-start justify-between gap-2">
+                            <div>
+                              <h3 className="font-medium text-sm">{template.name}</h3>
+                              {template.description && (
+                                <p className="text-xs text-muted-foreground mt-1">{template.description}</p>
+                              )}
+                            </div>
+                            <Layers className="h-4 w-4 text-blue-500 shrink-0" />
+                          </div>
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Case Filing Templates */}
               {caseFilingTemplates.length > 0 && (
                 <div>
@@ -644,6 +752,18 @@ export default function CaseFilingPage() {
                         >
                           <Eye className="h-4 w-4" />
                         </Button>
+                        {/* Generate Annexures — shown for PLAINT and other case-filing docs */}
+                        {["PLAINT", "RCP", "GOP", "SOP", "SARFAESI", "NI_ACT_138"].includes(doc.documentType) && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-blue-600"
+                            onClick={() => openAnnexureDialog(doc)}
+                            title="Generate Annexures (Vakkalath, Affidavits, Summons…)"
+                          >
+                            <Layers className="h-4 w-4" />
+                          </Button>
+                        )}
                         <RoleGate permission="cases:write">
                           <Button
                             variant="ghost"
@@ -950,6 +1070,87 @@ export default function CaseFilingPage() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Batch Annexure Generation Dialog ─────────────────────────── */}
+      <Dialog open={annexureOpen} onOpenChange={setAnnexureOpen}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Layers className="h-5 w-5" /> Generate Annexures
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {annexureSourceDoc && (
+              <div className="rounded-md bg-muted/50 border px-3 py-2 text-xs">
+                <p className="font-medium">For: {annexureSourceDoc.title}</p>
+                {annexureSourceDoc.case && (
+                  <p className="text-muted-foreground">Case: {annexureSourceDoc.case.caseNumber} — {annexureSourceDoc.case.title}</p>
+                )}
+              </div>
+            )}
+
+            {annexureTemplates.length === 0 ? (
+              <div className="text-center py-6 text-muted-foreground text-sm">
+                <p>No annexure templates loaded.</p>
+                <Button className="mt-3" variant="outline" onClick={handleSeedTemplates}>
+                  <Database className="mr-2 h-4 w-4" /> Seed All Templates
+                </Button>
+              </div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Select Annexures to Generate</Label>
+                  <div className="space-y-2">
+                    {annexureTemplates.map((tpl) => (
+                      <label key={tpl.id} className="flex items-center gap-3 p-2 rounded border cursor-pointer hover:bg-muted/40">
+                        <input
+                          type="checkbox"
+                          checked={selectedAnnexures.includes(tpl.documentType)}
+                          onChange={(e) => {
+                            setSelectedAnnexures((prev) =>
+                              e.target.checked
+                                ? [...prev, tpl.documentType]
+                                : prev.filter((d) => d !== tpl.documentType)
+                            );
+                          }}
+                          className="h-4 w-4"
+                        />
+                        <div>
+                          <p className="text-sm font-medium">{tpl.name}</p>
+                          {tpl.description && <p className="text-xs text-muted-foreground">{tpl.description}</p>}
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {batchResults.length > 0 && (
+                  <div className="space-y-1">
+                    <Label className="text-sm font-medium">Results</Label>
+                    {batchResults.map((r, i) => (
+                      <div key={i} className={`text-xs flex items-center gap-2 ${r.ok ? "text-green-600" : "text-red-500"}`}>
+                        {r.ok ? <CheckCircle className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                        {r.name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <Button
+                  className="w-full"
+                  onClick={handleBatchGenerate}
+                  disabled={batchGenerating || selectedAnnexures.length === 0}
+                >
+                  {batchGenerating
+                    ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating...</>
+                    : <><Layers className="mr-2 h-4 w-4" /> Generate {selectedAnnexures.length} Annexure(s)</>
+                  }
+                </Button>
+              </>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -14,7 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Building2, Plus, Pencil, Trash2, CheckCircle, Printer, FileText,
+  Building2, Plus, Pencil, Trash2, Printer, Upload, Settings, Loader2, CheckCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/role-gate";
@@ -26,7 +26,7 @@ const STATUS_COLORS: Record<string, "default" | "secondary" | "outline" | "destr
   FINALIZED: "default",
 };
 
-const BANK_OPINION_TEMPLATE = `LEGAL OPINION ON TITLE OF PROPERTY
+const DEFAULT_TEMPLATE = `LEGAL OPINION ON TITLE OF PROPERTY
 
 TO,
 The Branch Manager,
@@ -42,7 +42,7 @@ RE: TITLE OPINION FOR LOAN PROPOSED TO {{borrowerName}}
 We have been requested to furnish a Legal Opinion with respect to the title of the above-mentioned property proposed to be mortgaged as security for the loan.
 
 We have examined the following documents furnished to us:
-1. [List of documents]
+{{documentsExamined}}
 
 TITLE INVESTIGATION:
 
@@ -50,16 +50,16 @@ TITLE INVESTIGATION:
 Based on the documents examined, {{borrowerName}} is the absolute owner of the schedule property.
 
 2. CHAIN OF TITLE:
-[Describe the chain of title from original owner to borrower]
+{{chainOfTitle}}
 
 3. ENCUMBRANCES:
-Based on the Encumbrance Certificate for the period from [year] to [year], no encumbrances are found on the schedule property.
+Based on the Encumbrance Certificate for the period from {{ecPeriodFrom}} to {{ecPeriodTo}}, no encumbrances are found on the schedule property.
 
 4. LEGAL HEIRS / SUCCESSION:
-[If applicable]
+{{legalHeirs}}
 
 5. GOVERNMENT DUES:
-Property Tax paid up to [year]. [Other dues if any]
+Property Tax paid up to [year]. {{governmentDues}}
 
 6. LITIGATION:
 No litigation is pending against the schedule property.
@@ -68,8 +68,7 @@ No litigation is pending against the schedule property.
 The title to the schedule property is clear, marketable and free from all encumbrances.
 
 SCHEDULE OF PROPERTY:
-{{propertyAddress}}
-[Detailed schedule]
+{{propertySchedule}}
 
 OPINION:
 
@@ -82,14 +81,14 @@ d) The loan of Rs. {{loanAmount}}/- can be sanctioned on the security of the sch
 
 This opinion is based solely on the documents furnished to us and we are not responsible for any concealed facts.
 
-Date: [date]
-Place: [place]
+Date: {{date}}
+Place: {{place}}
 
 Yours faithfully,
 
-[Advocate Name]
+{{advocateName}}
 Advocate
-[Bar Council No.]`;
+{{barCouncilNumber}}`;
 
 interface BankOpinion {
   id: string;
@@ -109,19 +108,33 @@ interface BankOpinion {
 export default function BankOpinionPage() {
   const [opinions, setOpinions] = useState<BankOpinion[]>([]);
   const [cases, setCases] = useState<any[]>([]);
-  const [clients, setClients] = useState<any[]>([]);
+  const [bankClients, setBankClients] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [templateOpen, setTemplateOpen] = useState(false);
   const [editOpinion, setEditOpinion] = useState<BankOpinion | null>(null);
   const [editContent, setEditContent] = useState("");
   const [editStatus, setEditStatus] = useState("DRAFT");
 
+  // Template management
+  const [currentTemplate, setCurrentTemplate] = useState(DEFAULT_TEMPLATE);
+  const [editingTemplate, setEditingTemplate] = useState(DEFAULT_TEMPLATE);
+
+  // Document upload / analysis
+  const [uploading, setUploading] = useState(false);
+  const [docExtracted, setDocExtracted] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [form, setForm] = useState({
-    bankName: "", branchName: "", borrowerName: "",
-    propertyAddress: "", loanAmount: "",
-    caseId: "", clientId: "",
+    bankClientId: "",   // selected from client list
+    bankName: "",
+    branchName: "",
+    borrowerName: "",
+    propertyAddress: "",
+    loanAmount: "",
+    caseId: "",
   });
 
   const fetchOpinions = useCallback(async () => {
@@ -133,20 +146,75 @@ export default function BankOpinionPage() {
   }, []);
 
   useEffect(() => {
+    // Load saved template from localStorage
+    const saved = localStorage.getItem("bankOpinionTemplate");
+    if (saved) { setCurrentTemplate(saved); setEditingTemplate(saved); }
+
     Promise.all([
       fetchOpinions(),
       fetch("/api/cases?limit=200").then((r) => r.json()).then((d) => setCases(d.cases || [])),
-      fetch("/api/clients?limit=200").then((r) => r.json()).then((d) => setClients(d.clients || [])),
+      // Fetch company-type clients (banks)
+      fetch("/api/clients?clientType=COMPANY&limit=500").then((r) => r.json()).then((d) => setBankClients(d.clients || [])),
     ]).then(() => setLoading(false));
   }, [fetchOpinions]);
 
-  const getFilledTemplate = () => {
-    return BANK_OPINION_TEMPLATE
+  const handleBankSelect = (clientId: string) => {
+    const bank = bankClients.find((c) => c.id === clientId);
+    setForm((prev) => ({
+      ...prev,
+      bankClientId: clientId,
+      bankName: bank?.name || "",
+      branchName: bank?.address || "",
+    }));
+  };
+
+  // Upload documents and extract details using document analyzer
+  const handleDocUpload = async (file: File) => {
+    setUploading(true);
+    setDocExtracted(false);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch("/api/documents/analyze-parties", { method: "POST", body: fd });
+      if (!res.ok) throw new Error("Analysis failed");
+      const data = await res.json();
+
+      // Extract borrower (first defendant) and property info
+      const borrower = data.defendants?.[0]?.name || data.plaintiff?.name || "";
+      const loanAmt = data.loanAmount?.toString() || "";
+
+      setForm((prev) => ({
+        ...prev,
+        borrowerName: borrower || prev.borrowerName,
+        loanAmount: loanAmt || prev.loanAmount,
+        propertyAddress: prev.propertyAddress,
+      }));
+
+      setDocExtracted(true);
+      toast.success(`Document read: ${data.documentType || "Legal document"} — fields auto-filled`);
+    } catch {
+      toast.error("Could not extract info from document");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const getFilledContent = () => {
+    return currentTemplate
       .replace(/\{\{bankName\}\}/g, form.bankName)
       .replace(/\{\{branchName\}\}/g, form.branchName)
       .replace(/\{\{borrowerName\}\}/g, form.borrowerName)
       .replace(/\{\{propertyAddress\}\}/g, form.propertyAddress)
-      .replace(/\{\{loanAmount\}\}/g, form.loanAmount);
+      .replace(/\{\{propertySchedule\}\}/g, form.propertyAddress)
+      .replace(/\{\{loanAmount\}\}/g, form.loanAmount)
+      .replace(/\{\{date\}\}/g, format(new Date(), "dd/MM/yyyy"))
+      .replace(/\{\{place\}\}/g, "Palakkad")
+      .replace(/\{\{documentsExamined\}\}/g, "1. [List of documents furnished]")
+      .replace(/\{\{chainOfTitle\}\}/g, "[Describe the chain of title]")
+      .replace(/\{\{ecPeriodFrom\}\}/g, "[year]")
+      .replace(/\{\{ecPeriodTo\}\}/g, "[year]")
+      .replace(/\{\{legalHeirs\}\}/g, "[Not applicable / Details]")
+      .replace(/\{\{governmentDues\}\}/g, "[Other dues if any]");
   };
 
   const handleCreate = async () => {
@@ -154,23 +222,25 @@ export default function BankOpinionPage() {
       toast.error("Bank name and borrower name are required");
       return;
     }
-
     const res = await fetch("/api/bank-opinions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        ...form,
-        content: getFilledTemplate(),
-        caseId: form.caseId || undefined,
-        clientId: form.clientId || undefined,
+        bankName: form.bankName,
+        branchName: form.branchName || undefined,
+        borrowerName: form.borrowerName,
+        propertyAddress: form.propertyAddress || undefined,
         loanAmount: form.loanAmount || undefined,
+        content: getFilledContent(),
+        caseId: form.caseId || undefined,
+        clientId: form.bankClientId || undefined,
       }),
     });
-
     if (res.ok) {
       toast.success("Bank opinion created");
       setCreateOpen(false);
-      setForm({ bankName: "", branchName: "", borrowerName: "", propertyAddress: "", loanAmount: "", caseId: "", clientId: "" });
+      setForm({ bankClientId: "", bankName: "", branchName: "", borrowerName: "", propertyAddress: "", loanAmount: "", caseId: "" });
+      setDocExtracted(false);
       fetchOpinions();
     } else {
       toast.error("Failed to create");
@@ -211,6 +281,17 @@ export default function BankOpinionPage() {
     }
   };
 
+  const handleSaveTemplate = () => {
+    setCurrentTemplate(editingTemplate);
+    localStorage.setItem("bankOpinionTemplate", editingTemplate);
+    setTemplateOpen(false);
+    toast.success("Opinion template updated");
+  };
+
+  const handleResetTemplate = () => {
+    setEditingTemplate(DEFAULT_TEMPLATE);
+  };
+
   if (loading) return <div className="text-center py-10 text-muted-foreground">Loading...</div>;
 
   return (
@@ -221,14 +302,19 @@ export default function BankOpinionPage() {
             <Building2 className="h-8 w-8" /> Bank Opinion
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Generate legal opinions on property title for bank loans
+            Upload title documents → auto-extract details → generate legal opinion
           </p>
         </div>
-        <RoleGate permission="cases:write">
-          <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="mr-2 h-4 w-4" /> New Bank Opinion
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => { setEditingTemplate(currentTemplate); setTemplateOpen(true); }}>
+            <Settings className="mr-2 h-4 w-4" /> Manage Template
           </Button>
-        </RoleGate>
+          <RoleGate permission="cases:write">
+            <Button onClick={() => setCreateOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" /> New Bank Opinion
+            </Button>
+          </RoleGate>
+        </div>
       </div>
 
       {opinions.length === 0 ? (
@@ -256,21 +342,15 @@ export default function BankOpinionPage() {
                       {op.loanAmount && <span className="ml-2">Loan: ₹{op.loanAmount.toLocaleString()}</span>}
                     </div>
                     <div className="text-xs text-muted-foreground flex gap-3">
-                      {op.propertyAddress && <span>Property: {op.propertyAddress.substring(0, 50)}...</span>}
+                      {op.propertyAddress && <span>Property: {op.propertyAddress.substring(0, 60)}...</span>}
                       {op.case && <span>Case: {op.case.caseNumber}</span>}
-                      {op.client && <span>Client: {op.client.name}</span>}
                       <span>{format(new Date(op.createdAt), "dd MMM yyyy")}</span>
                     </div>
                   </div>
                   <div className="flex gap-1">
                     <Button
                       variant="ghost" size="icon"
-                      onClick={() => {
-                        setEditOpinion(op);
-                        setEditContent(op.content || "");
-                        setEditStatus(op.status);
-                        setEditOpen(true);
-                      }}
+                      onClick={() => { setEditOpinion(op); setEditContent(op.content || ""); setEditStatus(op.status); setEditOpen(true); }}
                     >
                       <Pencil className="h-4 w-4" />
                     </Button>
@@ -290,88 +370,127 @@ export default function BankOpinionPage() {
         </div>
       )}
 
-      {/* Create Dialog */}
+      {/* ── Create Dialog ─────────────────────────────────────────────── */}
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>New Bank Opinion</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label>Bank Name *</Label>
-                <Input
-                  value={form.bankName}
-                  onChange={(e) => setForm({ ...form, bankName: e.target.value })}
-                  placeholder="State Bank of India"
-                />
-              </div>
-              <div>
-                <Label>Branch Name</Label>
-                <Input
-                  value={form.branchName}
-                  onChange={(e) => setForm({ ...form, branchName: e.target.value })}
-                  placeholder="Main Branch"
-                />
-              </div>
-              <div>
-                <Label>Borrower Name *</Label>
-                <Input
-                  value={form.borrowerName}
-                  onChange={(e) => setForm({ ...form, borrowerName: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Loan Amount (₹)</Label>
-                <Input
-                  type="number"
-                  value={form.loanAmount}
-                  onChange={(e) => setForm({ ...form, loanAmount: e.target.value })}
-                />
-              </div>
-            </div>
-            <div>
-              <Label>Property Address</Label>
-              <Textarea
-                value={form.propertyAddress}
-                onChange={(e) => setForm({ ...form, propertyAddress: e.target.value })}
-                rows={2}
+
+            {/* Document Upload */}
+            <div className="rounded-md border-2 border-dashed p-4 space-y-2">
+              <p className="text-sm font-medium">Step 1 — Upload Title Documents (optional)</p>
+              <p className="text-xs text-muted-foreground">
+                Upload title deed, EC certificate, loan agreement etc. — system will auto-extract borrower name and loan amount.
+              </p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept=".pdf,.doc,.docx,.txt"
+                onChange={(e) => e.target.files?.[0] && handleDocUpload(e.target.files[0])}
               />
+              <div className="flex gap-2 items-center">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                >
+                  {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
+                  {uploading ? "Reading document..." : "Upload Document"}
+                </Button>
+                {docExtracted && (
+                  <span className="text-xs text-green-600 flex items-center gap-1">
+                    <CheckCircle className="h-3 w-3" /> Fields auto-filled from document
+                  </span>
+                )}
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+
+            {/* Bank Selection */}
+            <div className="space-y-3">
+              <p className="text-sm font-medium">Step 2 — Fill in Details</p>
               <div>
-                <Label>Link to Case</Label>
+                <Label>Select Bank (from client list)</Label>
+                <Select value={form.bankClientId} onValueChange={(v: any) => handleBankSelect(String(v || ""))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a bank client..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {bankClients.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground mt-1">Or type manually below</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Bank Name *</Label>
+                  <Input
+                    value={form.bankName}
+                    onChange={(e) => setForm({ ...form, bankName: e.target.value })}
+                    placeholder="State Bank of India"
+                  />
+                </div>
+                <div>
+                  <Label>Branch Name</Label>
+                  <Input
+                    value={form.branchName}
+                    onChange={(e) => setForm({ ...form, branchName: e.target.value })}
+                    placeholder="Palakkad Main Branch"
+                  />
+                </div>
+                <div>
+                  <Label>Borrower Name *</Label>
+                  <Input
+                    value={form.borrowerName}
+                    onChange={(e) => setForm({ ...form, borrowerName: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>Loan Amount (₹)</Label>
+                  <Input
+                    type="number"
+                    value={form.loanAmount}
+                    onChange={(e) => setForm({ ...form, loanAmount: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div>
+                <Label>Property Address / Schedule</Label>
+                <Textarea
+                  value={form.propertyAddress}
+                  onChange={(e) => setForm({ ...form, propertyAddress: e.target.value })}
+                  rows={3}
+                  placeholder="Survey No., Village, Taluk, District..."
+                />
+              </div>
+              <div>
+                <Label>Link to Case (optional)</Label>
                 <Select value={form.caseId} onValueChange={(v: any) => setForm({ ...form, caseId: v === "none" ? "" : String(v || "") })}>
                   <SelectTrigger><SelectValue placeholder="Select case (optional)" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="none">None</SelectItem>
                     {cases.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.caseNumber} - {c.title}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Link to Client</Label>
-                <Select value={form.clientId} onValueChange={(v: any) => setForm({ ...form, clientId: v === "none" ? "" : String(v || "") })}>
-                  <SelectTrigger><SelectValue placeholder="Select client (optional)" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
-                    {clients.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      <SelectItem key={c.id} value={c.id}>{c.caseNumber} — {c.title}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
+
             <Button onClick={handleCreate} className="w-full">
-              Create Bank Opinion
+              Generate Bank Opinion
             </Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Edit Dialog */}
+      {/* ── Edit Dialog ───────────────────────────────────────────────── */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
@@ -397,8 +516,45 @@ export default function BankOpinionPage() {
             />
             <div className="flex gap-2">
               <Button onClick={handleSaveEdit} className="flex-1">Save</Button>
-              <Button variant="outline" onClick={() => editOpinion && handlePrint({ ...editOpinion, content: editContent })}>
+              <Button
+                variant="outline"
+                onClick={() => editOpinion && handlePrint({ ...editOpinion, content: editContent })}
+              >
                 <Printer className="mr-2 h-4 w-4" /> Print
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Manage Template Dialog ────────────────────────────────────── */}
+      <Dialog open={templateOpen} onOpenChange={setTemplateOpen}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5" /> Manage Bank Opinion Template
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Edit the standard format for all bank opinions. Use{" "}
+              <code className="bg-muted px-1 rounded text-xs">{"{{variable}}"}</code> placeholders.
+              Available: bankName, branchName, borrowerName, propertyAddress, propertySchedule, loanAmount,
+              documentsExamined, chainOfTitle, ecPeriodFrom, ecPeriodTo, legalHeirs,
+              governmentDues, advocateName, barCouncilNumber, date, place.
+            </p>
+            <Textarea
+              value={editingTemplate}
+              onChange={(e) => setEditingTemplate(e.target.value)}
+              rows={35}
+              className="font-mono text-xs"
+            />
+            <div className="flex gap-2">
+              <Button onClick={handleSaveTemplate} className="flex-1">
+                Save Template
+              </Button>
+              <Button variant="outline" onClick={handleResetTemplate}>
+                Reset to Default
               </Button>
             </div>
           </div>

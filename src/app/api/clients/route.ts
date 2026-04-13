@@ -14,21 +14,25 @@ export async function GET(request: NextRequest) {
 
   // showAll=true allows viewing inactive (opposition) clients for reference
   const showAll = searchParams.get("showAll") === "true";
+  // clientType filter e.g. ?clientType=COMPANY to get only banks/institutions
+  const clientType = searchParams.get("clientType") || "";
+
+  const base: any = {
+    organizationId,
+    ...(showAll ? {} : { isActive: true }),
+    ...(clientType ? { clientType } : {}),
+  };
 
   const where = search
     ? {
-        organizationId,
-        ...(showAll ? {} : { isActive: true }),
+        ...base,
         OR: [
           { name: { contains: search } },
           { email: { contains: search } },
           { phone: { contains: search } },
         ],
       }
-    : {
-        organizationId,
-        ...(showAll ? {} : { isActive: true }),
-      };
+    : base;
 
   const [clients, total] = await Promise.all([
     prisma.client.findMany({
