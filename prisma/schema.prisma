@@ -170,6 +170,23 @@ model Case {
   ecourtStatus    String?
   lastSyncedAt    DateTime?
   notes           String?
+  // Loan / banking fields (mostly used for EP/SARFAESI/NI Act cases)
+  loanType              String?    // ATL, OD, CC, TL, HL, VL, PL, GL, MSME, AGRI, EDUCATION, SARFAESI, etc.
+  loanAccountNumber     String?
+  principalAmount       Float?
+  interestRate          Float?     // Annual %
+  penalInterestRate     Float?     // Annual % (penal/default rate)
+  interestRests         String?    // MONTHLY, QUARTERLY, HALF_YEARLY, YEARLY, SIMPLE
+  loanDisbursementDate  DateTime?
+  loanDueDate           DateTime?
+  salaryDeductionApplicable Boolean @default(false)
+  cheatingClauseApplicable  Boolean @default(false)
+  // Appeal tracking (when this case goes to appeal)
+  appealStatus    String?   // NONE, FILED, PENDING, ALLOWED, DISMISSED, WITHDRAWN
+  appealCourt     String?
+  appealNumber    String?
+  appealDate      DateTime?
+  appealNotes     String?
   organizationId  String
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -190,6 +207,48 @@ model Case {
   courtFeeEntries CourtFeeEntry[]
   feeAgreements   FeeAgreement[]
   bankOpinions    BankOpinion[]
+  revivalLetters  RevivalLetter[]
+  accountStatements AccountStatement[]
+}
+
+model RevivalLetter {
+  id             String   @id @default(uuid())
+  caseId         String
+  revivalDate    DateTime
+  revivalType    String   @default("LETTER") // LETTER, PART_PAYMENT, ACKNOWLEDGMENT, BALANCE_CONFIRMATION
+  amount         Float?   // Payment amount or acknowledged balance
+  reference      String?  // Letter reference number or payment receipt no.
+  newLimitationDate DateTime? // Auto-computed: revivalDate + 3 years
+  notes          String?
+  organizationId String
+  createdBy      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  case           Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+}
+
+model AccountStatement {
+  id             String   @id @default(uuid())
+  caseId         String
+  title          String   @default("Statement of Accounts")
+  asOnDate       DateTime
+  principalAmount Float
+  interestRate   Float    // Annual %
+  penalRate      Float?
+  rests          String   @default("QUARTERLY") // MONTHLY, QUARTERLY, HALF_YEARLY, YEARLY, SIMPLE
+  fromDate       DateTime
+  toDate         DateTime
+  totalInterest  Float    @default(0)
+  totalPenalInterest Float @default(0)
+  totalDue       Float    @default(0)
+  transactions   String?  // JSON array of {date, type, amount, description}
+  schedule       String?  // JSON array of period calculations
+  notes          String?
+  organizationId String
+  createdBy      String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  case           Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
 }
 
 model OppositeParty {

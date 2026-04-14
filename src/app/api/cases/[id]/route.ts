@@ -36,8 +36,23 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
   const { id } = await params;
   const body = await request.json();
 
-  if (body.filingDate) body.filingDate = new Date(body.filingDate);
-  if (body.nextHearingDate) body.nextHearingDate = new Date(body.nextHearingDate);
+  // Date conversions
+  for (const k of ["filingDate", "nextHearingDate", "loanDisbursementDate", "loanDueDate", "appealDate"]) {
+    if (body[k]) body[k] = new Date(body[k]);
+    else if (body[k] === "") body[k] = null;
+  }
+  // Numeric coercions
+  for (const k of ["suitValue", "courtFee", "principalAmount", "interestRate", "penalInterestRate"]) {
+    if (body[k] !== undefined && body[k] !== null && body[k] !== "") {
+      body[k] = parseFloat(body[k]);
+    } else if (body[k] === "") {
+      body[k] = null;
+    }
+  }
+  // Boolean coercions
+  for (const k of ["salaryDeductionApplicable", "cheatingClauseApplicable"]) {
+    if (body[k] !== undefined) body[k] = !!body[k];
+  }
 
   const existing = await prisma.case.findFirst({ where: { id, organizationId } });
   if (!existing) {

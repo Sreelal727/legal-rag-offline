@@ -291,6 +291,8 @@ export default function CaseDetailPage() {
           <TabsTrigger value="events">Events</TabsTrigger>
           <TabsTrigger value="documents">Documents</TabsTrigger>
           <TabsTrigger value="diary">Diary</TabsTrigger>
+          <TabsTrigger value="banking">Banking / Loan</TabsTrigger>
+          <TabsTrigger value="appeal">Appeal</TabsTrigger>
         </TabsList>
 
         <TabsContent value="parties" className="space-y-4">
@@ -427,6 +429,14 @@ export default function CaseDetailPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="banking">
+          <BankingLoanSection caseId={params.id as string} caseData={caseData} onUpdate={fetchCase} />
+        </TabsContent>
+
+        <TabsContent value="appeal">
+          <AppealSection caseId={params.id as string} caseData={caseData} onUpdate={fetchCase} />
         </TabsContent>
       </Tabs>
 
@@ -684,6 +694,218 @@ function OppositePartiesSection({
             })}
           </div>
         )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================================
+// Banking / Loan section
+// ============================================================
+function BankingLoanSection({ caseId, caseData, onUpdate }: any) {
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    loanType: caseData.loanType || "",
+    loanAccountNumber: caseData.loanAccountNumber || "",
+    principalAmount: caseData.principalAmount?.toString() || "",
+    interestRate: caseData.interestRate?.toString() || "",
+    penalInterestRate: caseData.penalInterestRate?.toString() || "",
+    interestRests: caseData.interestRests || "QUARTERLY",
+    loanDisbursementDate: caseData.loanDisbursementDate?.slice(0, 10) || "",
+    loanDueDate: caseData.loanDueDate?.slice(0, 10) || "",
+    salaryDeductionApplicable: !!caseData.salaryDeductionApplicable,
+    cheatingClauseApplicable: !!caseData.cheatingClauseApplicable,
+  });
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/cases/${caseId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (res.ok) {
+        toast.success("Banking details saved");
+        onUpdate();
+      } else {
+        const e = await res.json();
+        toast.error(e.error || "Save failed");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Banking / Loan Details</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <Label>Loan Type</Label>
+            <Select
+              value={form.loanType}
+              onValueChange={(v) => setForm({ ...form, loanType: v })}
+            >
+              <SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger>
+              <SelectContent>
+                {["ATL","OD","CC","TL","HL","VL","PL","GL","EL","MSME","AGRI","KCC","SARFAESI","CREDIT_CARD","OTHER"].map((lt) => (
+                  <SelectItem key={lt} value={lt}>{lt}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Loan Account Number</Label>
+            <Input value={form.loanAccountNumber} onChange={(e) => setForm({ ...form, loanAccountNumber: e.target.value })} />
+          </div>
+          <div>
+            <Label>Principal (₹)</Label>
+            <Input type="number" value={form.principalAmount} onChange={(e) => setForm({ ...form, principalAmount: e.target.value })} />
+          </div>
+          <div>
+            <Label>Interest Rate (% p.a.)</Label>
+            <Input type="number" step="0.01" value={form.interestRate} onChange={(e) => setForm({ ...form, interestRate: e.target.value })} />
+          </div>
+          <div>
+            <Label>Penal Interest Rate (% p.a.)</Label>
+            <Input type="number" step="0.01" value={form.penalInterestRate} onChange={(e) => setForm({ ...form, penalInterestRate: e.target.value })} />
+          </div>
+          <div>
+            <Label>Interest Rests</Label>
+            <Select value={form.interestRests} onValueChange={(v) => setForm({ ...form, interestRests: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="MONTHLY">Monthly</SelectItem>
+                <SelectItem value="QUARTERLY">Quarterly</SelectItem>
+                <SelectItem value="HALF_YEARLY">Half-Yearly</SelectItem>
+                <SelectItem value="YEARLY">Yearly</SelectItem>
+                <SelectItem value="SIMPLE">Simple Interest</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Disbursement Date</Label>
+            <Input type="date" value={form.loanDisbursementDate} onChange={(e) => setForm({ ...form, loanDisbursementDate: e.target.value })} />
+          </div>
+          <div>
+            <Label>Due Date</Label>
+            <Input type="date" value={form.loanDueDate} onChange={(e) => setForm({ ...form, loanDueDate: e.target.value })} />
+          </div>
+        </div>
+
+        <div className="flex gap-6 pt-2 border-t">
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={form.salaryDeductionApplicable}
+              onChange={(e) => setForm({ ...form, salaryDeductionApplicable: e.target.checked })}
+            />
+            Salary Deduction Clause Applicable
+          </label>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              checked={form.cheatingClauseApplicable}
+              onChange={(e) => setForm({ ...form, cheatingClauseApplicable: e.target.checked })}
+            />
+            Cheating / Fraud Clause Applicable (Sec 420 IPC / 318 BNS)
+          </label>
+        </div>
+
+        <div className="flex gap-2 pt-2">
+          <Button onClick={save} disabled={saving}>
+            {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+            Save Banking Details
+          </Button>
+          <Link href={`/statement-of-accounts?caseId=${caseId}`}>
+            <Button variant="outline">Open Statement of A/c →</Button>
+          </Link>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ============================================================
+// Appeal section
+// ============================================================
+function AppealSection({ caseId, caseData, onUpdate }: any) {
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    appealStatus: caseData.appealStatus || "NONE",
+    appealCourt: caseData.appealCourt || "",
+    appealNumber: caseData.appealNumber || "",
+    appealDate: caseData.appealDate?.slice(0, 10) || "",
+    appealNotes: caseData.appealNotes || "",
+  });
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/cases/${caseId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (res.ok) {
+        toast.success("Appeal details saved");
+        onUpdate();
+      } else {
+        const e = await res.json();
+        toast.error(e.error || "Save failed");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base">Appeal / Revision Tracking</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div>
+            <Label>Appeal Status</Label>
+            <Select value={form.appealStatus} onValueChange={(v) => setForm({ ...form, appealStatus: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="NONE">None</SelectItem>
+                <SelectItem value="CONTEMPLATED">Contemplated</SelectItem>
+                <SelectItem value="FILED">Filed</SelectItem>
+                <SelectItem value="PENDING">Pending</SelectItem>
+                <SelectItem value="ALLOWED">Allowed</SelectItem>
+                <SelectItem value="DISMISSED">Dismissed</SelectItem>
+                <SelectItem value="WITHDRAWN">Withdrawn</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Appellate Court</Label>
+            <Input value={form.appealCourt} onChange={(e) => setForm({ ...form, appealCourt: e.target.value })} placeholder="e.g., High Court of Kerala" />
+          </div>
+          <div>
+            <Label>Appeal Number</Label>
+            <Input value={form.appealNumber} onChange={(e) => setForm({ ...form, appealNumber: e.target.value })} placeholder="e.g., RFA 123/2025" />
+          </div>
+          <div>
+            <Label>Appeal Filing Date</Label>
+            <Input type="date" value={form.appealDate} onChange={(e) => setForm({ ...form, appealDate: e.target.value })} />
+          </div>
+        </div>
+        <div>
+          <Label>Appeal Notes</Label>
+          <Textarea rows={4} value={form.appealNotes} onChange={(e) => setForm({ ...form, appealNotes: e.target.value })} />
+        </div>
+        <Button onClick={save} disabled={saving}>
+          {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+          Save Appeal Details
+        </Button>
       </CardContent>
     </Card>
   );
