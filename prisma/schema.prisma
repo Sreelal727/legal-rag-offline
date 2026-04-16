@@ -50,6 +50,7 @@ model Organization {
   courtFeeEntries    CourtFeeEntry[]
   feeAgreements      FeeAgreement[]
   bankOpinions       BankOpinion[]
+  bankingMatters     BankingMatter[]
 }
 
 model User {
@@ -209,6 +210,8 @@ model Case {
   bankOpinions    BankOpinion[]
   revivalLetters  RevivalLetter[]
   accountStatements AccountStatement[]
+  bankingMatters  BankingMatter[]
+  executionPetitions ExecutionPetition[]
 }
 
 model RevivalLetter {
@@ -812,4 +815,67 @@ model BankOpinion {
   client         Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   creator        User     @relation(fields: [createdBy], references: [id])
+}
+
+// ============================================================
+// Banking Matter Pipeline
+// ============================================================
+model BankingMatter {
+  id              String   @id @default(uuid())
+  title           String   // e.g., "SIB Kottayi vs. Rajan K."
+  caseId          String?  // linked after case is created
+  bankClientId    String?  // Client (bank) acting as petitioner/plaintiff
+  suitType        String   @default("OS") // OS or CS
+  currentStage    String   @default("DOCUMENTS") // DOCUMENTS, NOTICE, MEDIATION, PLAINT, FILING_BUNDLE, FILED, TRIAL, DECREE, EXECUTION
+  status          String   @default("ACTIVE") // ACTIVE, COMPLETED, ABANDONED
+  extractedData   String?  // JSON — consolidated data card from AI extraction
+  courtName       String?
+  courtType       String?  // Munsiff, Sub-Court, District Court, Commercial Court
+  notes           String?
+  organizationId  String
+  createdBy       String
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  case            Case?    @relation(fields: [caseId], references: [id], onDelete: SetNull)
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  matterDocuments MatterDocument[]
+}
+
+model MatterDocument {
+  id              String    @id @default(uuid())
+  matterId        String
+  documentType    String    // DEMAND_NOTICE, OS_PLAINT, CS_PLAINT, FACT_AFFIDAVIT, etc.
+  title           String
+  content         String    // Generated document text
+  status          String    @default("GENERATED") // GENERATED, UNDER_REVIEW, APPROVED
+  templateUsed    String?   // Template name used to generate
+  sortOrder       Int       @default(0)
+  approvedAt      DateTime?
+  approvedBy      String?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  matter          BankingMatter @relation(fields: [matterId], references: [id], onDelete: Cascade)
+}
+
+model ExecutionPetition {
+  id                    String   @id @default(uuid())
+  caseId                String
+  epNumber              String?  // E.P. No. (assigned by court after filing)
+  epType                String   // EP_ARREST, EP_ATTACHMENT_SALE, EP_SALE, EP_TRANSFER, EP_DELIVERY
+  decreeDate            DateTime?
+  decretalAmount        Float?
+  costAwarded           Float?
+  postDecreeInterestRate Float?
+  decreeContent         String?  // Uploaded decree text (AI-extracted)
+  generatedContent      String?  // Generated EP petition text
+  affidavitContent      String?  // Generated EP affidavit text
+  propertySchedule      String?  // JSON — property details for A&S/Sale EPs
+  previousEPs           String?  // JSON — history of prior EPs
+  status                String   @default("DRAFT") // DRAFT, UNDER_REVIEW, APPROVED, FILED
+  organizationId        String
+  createdBy             String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  case                  Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
 }
