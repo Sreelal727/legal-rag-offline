@@ -28,6 +28,7 @@ import {
   FileCog,
   Calculator,
   RefreshCw,
+  Landmark,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { hasPermission, type Role, type Permission } from "@/lib/permissions";
@@ -40,6 +41,7 @@ const navItems = [
   { href: "/submissions", label: "Doc Submissions", icon: FileCheck, permission: "cases:read" as Permission },
   { href: "/case-filing", label: "Case Filing", icon: Stamp, permission: "cases:read" as Permission },
   { href: "/interlocutory", label: "IA Petitions", icon: Scale, permission: "cases:read" as Permission },
+  { href: "/banking-matter", label: "Banking Matters", icon: Landmark, permission: "cases:read" as Permission },
   { href: "/execution", label: "Execution & EP", icon: Gavel, permission: "cases:read" as Permission },
   { href: "/statement-of-accounts", label: "Statement of A/c", icon: Calculator, permission: "cases:read" as Permission },
   { href: "/revival-letters", label: "Revival Letters", icon: RefreshCw, permission: "cases:read" as Permission },
