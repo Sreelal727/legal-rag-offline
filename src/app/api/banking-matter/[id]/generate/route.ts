@@ -104,8 +104,26 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
         .join("\n\n");
       autoVars.defendantName = caseData.oppositeParties[0].name;
       autoVars.defendantAddress = caseData.oppositeParties[0].address || "";
+      autoVars.defendantPhone = caseData.oppositeParties[0].phone || "";
       autoVars.judgmentDebtorBlock = autoVars.defendantBlock.replace(/Defendant/g, "Respondent / Judgment Debtor");
       autoVars.judgmentDebtorNames = caseData.oppositeParties.map((op: any) => op.name).join(", ");
+    }
+
+    // Build loan facilities narrative for mediation application
+    if (extracted.loanFacilities?.length) {
+      autoVars.loanFacilitiesBlock = extracted.loanFacilities
+        .map((f: any, i: number) => {
+          return `${i + 1}. ${f.description || f.type} of Rs.${Number(f.amount || 0).toLocaleString("en-IN")}/- (A/c No. ${f.accountNumber || ""}) sanctioned on ${f.sanctionDate || ""} with interest at ${f.interestRate || ""}% p.a.`;
+        })
+        .join("\n\n");
+    }
+
+    // Build documents executed narrative for mediation application
+    if (extracted.documentsExecuted?.length) {
+      autoVars.documentsExecutedBlock = "The Opposite Party has executed and delivered the following documents:\n\n" +
+        extracted.documentsExecuted
+          .map((d: any, i: number) => `(${String.fromCharCode(97 + i)}) ${typeof d === "string" ? d : d.description || JSON.stringify(d)}`)
+          .join("\n\n");
     }
 
     // Latest SOA total → outstandingAmount

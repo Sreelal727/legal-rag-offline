@@ -425,51 +425,80 @@ export const MEDIATION_APPLICATION_TEMPLATE = {
   name: "Pre-Institution Mediation Application (CS)",
   category: "BANKING_MATTER",
   documentType: "MEDIATION_APPLICATION",
-  description: "Form-1 under Rule 3(1) — mandatory pre-institution mediation for Commercial Suits",
+  description: "Form-1 under Rule 3(1) — mandatory pre-institution mediation for Commercial Suits (DLSA Palakkad format)",
   courtType: "COMMERCIAL_COURT",
   variables: JSON.stringify([
-    "courtName", "bankName", "branchName", "bankAddress",
-    "defendantBlock",
-    "natureOfDispute", "quantumOfClaim", "briefSynopsis",
-    "advocateName", "advocateAddress",
-    "ddNumber", "ddDate", "ddAmount",
+    "bankName", "branchName", "bankAddress", "bankPhone", "bankEmail",
+    "authorizedOfficerName", "authorizedOfficerDesignation",
+    "defendantName", "defendantAddress", "defendantPhone",
+    "natureOfDispute", "outstandingAmount", "causeOfActionPlace",
+    "briefSynopsis", "loanFacilitiesBlock", "documentsExecutedBlock",
     "date", "place",
+    "ddNumber", "ddDate",
   ]),
-  content: `FORM - 1
+  content: `MEDIATION APPLICATION FORM
+[(Refer Rule 3(1)]
 
-                    MEDIATION APPLICATION FORM
-                    (Refer Rule 3(1))
+Mediation Centre, DLSA Palakkad
 
-BEFORE THE MEDIATION CENTRE / COMMERCIAL COURT AT {{courtName}}
 
-1. APPLICANT (Plaintiff):
-   Name: {{bankName}}, {{branchName}}
-   Address: {{bankAddress}}
-   Through Advocate: {{advocateName}}, {{advocateAddress}}
+1. Name of Applicant: {{bankName}}, {{branchName}},
 
-2. RESPONDENT (Proposed Defendant):
-{{defendantBlock}}
+2. Address and contact details of applicant:
+{{authorizedOfficerDesignation}},
+{{bankName}},
+{{branchName}},
+{{bankAddress}}
+Mobile No: {{bankPhone}}
+Email: {{bankEmail}}
+[Within the jurisdiction of .......... Police Station, Palakkad]
 
-3. NATURE OF DISPUTE AS PER SECTION 2(1)(c) OF THE COMMERCIAL COURTS ACT, 2015:
-   {{natureOfDispute}}
+3. Name of Opposite Party:
+{{defendantName}},
+{{defendantAddress}}
+Mobile: {{defendantPhone}}
+[Within the jurisdiction of ..... Police Station].
 
-4. QUANTUM OF CLAIM:
-   Rs. {{quantumOfClaim}}/-
 
-5. BRIEF SYNOPSIS OF COMMERCIAL DISPUTE (not to exceed 5000 words):
-   {{briefSynopsis}}
+DETAILS OF DISPUTE
 
-6. FEE PAID BY DD No. {{ddNumber}} dated {{ddDate}} for Rs. {{ddAmount}}/-
+1. Nature of dispute as per section 2(i)(c) of the commercial courts Act, 2015 (4 of 2016)
 
-7. The applicant has not filed any suit in respect of the subject matter of this application.
+{{natureOfDispute}}
 
-8. The applicant undertakes to participate in the mediation proceedings in good faith.
+2. Quantum of claim: Rs. {{outstandingAmount}}
 
-Place: {{place}}
-Date: {{date}}
+3. Territorial jurisdiction of the competent court: {{causeOfActionPlace}}
 
-                                                    {{advocateName}}
-                                                    Advocate for the Applicant`,
+
+4. Brief synopsis of commercial dispute (Not to exceed 5000 words):
+
+{{briefSynopsis}}
+
+{{loanFacilitiesBlock}}
+
+{{documentsExecutedBlock}}
+
+
+5. Additional points of relevance:
+
+
+
+DETAILS OF FEE PAID:
+Fee paid by DD No. {{ddNumber}} dated {{ddDate}}. Name of Bank and branch: .............................
+Online transaction NO. ........... dated ...............
+
+Date: {{date}}                                    Name and signature of Applicant
+
+
+Form shall be submitted to the Authority with a fee of one thousand rupees.
+
+Form received on:
+File No. allotted:
+Mode of sending notice to the opposite party:
+Notice to opposite party sent on:
+Whether Notice acknowledged by opposite party or not:
+Date of Non-starter report/Assignment of commercial dispute to Mediator:`,
 };
 
 // ============================================================
@@ -489,47 +518,56 @@ export const VAKALATNAMA_TEMPLATE = {
     "oppositePartyName",
     "date",
   ]),
-  content: `FORM NO. 12  (Rule 27)
+  content: `FORM NO. 12  ( Rule   27 )
 
-                          V A K K A L A T H
+V A K K A L A T H
 
-                          No.          of {{year}}
+
+No.          of    {{year}}
+
 
 IN THE COURT OF THE {{courtName}}
 
-                          {{caseType}} No. {{caseNumber}} of {{year}}
+{{caseType}} No. {{caseNumber}} of {{year}}
+-----------------------------------
+{{plaintiffName}}					)
+						)     Plaintiff/Petitioner
+						)
+					Vs.
 
-{{clientName}}                                    ...  Plaintiff/Petitioner
-
-                                    Vs.
-
-{{oppositePartyName}}                             ...  Defendant/Respondent
-
-    I/We, {{clientName}}, {{clientDesignation}} {{clientFatherName}}, aged about {{clientAge}} years, residing at {{clientAddress}}, do hereby appoint and retain {{advocateName}}, Advocates, {{advocateAddress}}, to appear for me/us in the above suit (Appeal or petition) and to conduct and prosecute or (defend) the same and all proceedings that may be taken in respect of any application for execution of any decree or order passed therein.
-
-    I/We empower the said Pleader to appear in all miscellaneous proceedings in the above suit or matter till all decrees or orders are fully satisfied or adjusted and to produce in Court any money, documents or valuable security on my/our behalf, to apply for their return and to receive back the same, to apply for and obtain copies of all documents in the record of proceedings, to draw any money that might be payable to me/us in the above suit or matter.
-
-    And I/We do further empower my/our Pleader to accept on my/our behalf service of notice of all or any appeals or petitions filed in any Court of appeal, reference or Revision with regard to the said suit or matter, before the disposal of the same in this Honourable Court.
-
-    And I/We do hereby agree that everything lawfully done or made by the said Pleader in the conduct of the suit or matter shall be as valid and binding on me/us as if done by me/us in person.
-
-    Signed this the {{date}}.
+{{defendantBlock}}
 
 
-                                    _______________________________
-                                    {{clientName}}
+	I/We, {{clientName}}, {{clientDesignation}} {{clientFatherName}}, aged about {{clientAge}} years, residing at {{clientAddress}}, do hereby appoint and retain {{advocateName}}, Advocates, {{advocateAddress}}, to appear for me/us in the above suit (Appeal or petition) and to conduct and prosecute or (defend) the same and all proceedings that may be taken in respect of any application for execution of any decree or order passed therein.  I/We empower the said Pleader to appear in all miscellaneous proceedings in the above suit or matter till all decrees or orders are fully satisfied or adjusted and to produce in Court any money, documents or valuable security on my/our behalf, to apply for their return and to receive back the same, to apply for and obtain copies of all documents in the record of proceedings, to draw any money that might be payable to me/us in the above suit or matter and I do further empower my/our Pleader to accept on my/our behalf service of notice of all or any appeals or petitions filed in any Court of appeal, reference or Revision with regard to the said suit or matter, before the disposal of the same in this Honourable Court, and I do hereby agree that everything lawfully done or made by the said Pleader in the conduct of the suit or matter shall be as valid and binding on me/us as if done by me/us in person.
+
+
+	Signed this the {{date}}.
+
 
 Signed before me
 
+
 {{advocateName}}
-Advocate, {{advocateAddress}}
+Advocates, Palakkad.
 
 
-                              Filed on:
+					Filed on:
+					-----------------------------------
 
-                              Address for Service:
-                              {{advocateName}}, Advocates
-                              {{advocateAddress}}`,
+					BEFORE THE
+					{{courtName}}
+
+					{{caseType}} No. {{caseNumber}} OF {{year}}
+
+
+					VAKKALATH FOR
+
+					Plaintiff/Petitioner
+
+
+					Address for Service:
+					{{advocateName}}
+					{{advocateAddress}}`,
 };
 
 // ============================================================

@@ -5,7 +5,7 @@ import { chatCompletion } from "@/lib/llm";
 import { writeFile, mkdir, unlink } from "fs/promises";
 import path from "path";
 
-export const maxDuration = 180;
+export const maxDuration = 300; // 5 min — large merged PDFs take time to extract
 
 /**
  * Multi-document AI extraction for banking matters.
@@ -52,11 +52,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "No readable documents found" }, { status: 400 });
   }
 
-  // Combine all texts (truncated to fit context)
+  // Combine all texts (truncated to fit LLM context window)
+  // A merged 150MB PDF may contain all documents — allow more chars per file
   const combinedText = allTexts
-    .map((t) => `--- FILE: ${t.fileName} ---\n${t.text.substring(0, 4000)}`)
+    .map((t) => `--- FILE: ${t.fileName} ---\n${t.text.substring(0, 15000)}`)
     .join("\n\n")
-    .substring(0, 20000);
+    .substring(0, 40000);
 
   // AI extraction
   const systemPrompt = `You are a legal document analyzer for an Indian banking recovery law practice (Gourisankar Associates, Palakkad, Kerala).
