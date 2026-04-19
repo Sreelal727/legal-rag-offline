@@ -93,21 +93,36 @@ export async function extractTextFromDoc(filePath: string): Promise<string> {
 }
 
 /**
- * Extract text from PDF using pdf-parse
- * Note: pdf-parse tries to load a test PDF on require(), so we handle this carefully
+ * Extract text from PDF.
+ * 1. First tries pdf-parse (fast, perfect Unicode for digital/text-layer PDFs).
+ * 2. If the text layer is too sparse the PDF is likely scanned — falls back to
+ *    pdfjs-dist + @napi-rs/canvas + Tesseract OCR with "eng+mal" (English + Malayalam).
  */
 export async function extractTextFromPdf(filePath: string): Promise<string> {
   const buffer = readFileSync(filePath);
+
+  // --- Step 1: Try the text layer ---
+  let textLayerText = "";
   try {
     const pdfParse = await import("pdf-parse");
     const pdf = (pdfParse as any).default || pdfParse;
     const data = await pdf(buffer);
-    return data.text;
+    textLayerText = data.text?.trim() ?? "";
   } catch (e: any) {
-    console.error("pdf-parse failed, trying fallback:", e?.message);
-    // Fallback: return a placeholder if pdf-parse fails on serverless
-    throw new Error("PDF extraction failed: " + (e?.message || "unknown error"));
+    console.error("pdf-parse failed:", e?.message);
   }
+
+  // Digital PDF — has meaningful text layer
+  if (textLayerText.replace(/\s/g, "").length >= 100) {
+    return textLayerText;
+  }
+
+  // --- Step 2: Scanned/image PDF — use OCR ---
+  console.log(
+    `[extractTextFromPdf] Sparse text layer, falling back to OCR (eng+mal)…`
+  );
+  const { ocrScannedPdf } = await import("./document-analyzer");
+  return await ocrScannedPdf(buffer);
 }
 
 /**

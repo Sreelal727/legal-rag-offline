@@ -313,8 +313,96 @@ function fallbackPatternAnalysis(text: string): DocumentAnalysis {
 }
 
 /**
+ * OCR a scanned PDF using pdfjs-dist (page renderer) + Tesseract.js (eng+mal).
+ *
+ * pdfjs-dist v5 in Node.js automatically uses its built-in NodeCanvasFactory
+ * which relies on @napi-rs/canvas (pre-built Rust binaries, no system deps).
+ * Each page is rendered at 2× scale for better OCR accuracy, converted to PNG,
+ * then fed to Tesseract with the "eng+mal" language pack.
+ *
+ * Limited to the first MAX_OCR_PAGES pages to keep processing time reasonable.
+ */
+const MAX_OCR_PAGES = 40;
+
+export async function ocrScannedPdf(pdfBuffer: Buffer): Promise<string> {
+  // All imports are dynamic so that bundlers don't include them in client chunks
+  // and so that the heavy modules are only loaded when actually needed.
+  const pdfjsModule = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as any;
+  const pdfjs = pdfjsModule.default ?? pdfjsModule;
+
+  // Disable the background worker — in Node.js we render in the main thread.
+  // Setting workerSrc to "" activates pdfjs-dist's built-in "fake" worker.
+  pdfjs.GlobalWorkerOptions.workerSrc = "";
+
+  const { createCanvas } = (await import("@napi-rs/canvas")) as any;
+
+  const TesseractModule = (await import("tesseract.js")) as any;
+  const Tesseract = TesseractModule.default ?? TesseractModule;
+
+  const pdfDoc = await pdfjs.getDocument({
+    data: new Uint8Array(pdfBuffer),
+    // Safe options for server-side rendering without a browser environment:
+    // - useSystemFonts: use whatever fonts are available on the OS
+    // - disableFontFace: skip @font-face CSS (no DOM, not needed for OCR)
+    useSystemFonts: true,
+    disableFontFace: true,
+  }).promise;
+
+  const totalPages: number = pdfDoc.numPages;
+  const pagesToProcess = Math.min(totalPages, MAX_OCR_PAGES);
+  console.log(
+    `[ocrScannedPdf] Processing ${pagesToProcess}/${totalPages} pages with Tesseract eng+mal…`
+  );
+
+  const pageTexts: string[] = [];
+
+  for (let pageNum = 1; pageNum <= pagesToProcess; pageNum++) {
+    try {
+      const page = await pdfDoc.getPage(pageNum);
+      // 2× scale gives ~144 dpi which Tesseract handles well
+      const viewport = page.getViewport({ scale: 2.0 });
+      const width = Math.round(viewport.width);
+      const height = Math.round(viewport.height);
+
+      const canvas = createCanvas(width, height);
+      const ctx = canvas.getContext("2d");
+
+      await page.render({ canvasContext: ctx, viewport }).promise;
+
+      // Export the rendered page as PNG for Tesseract
+      // @napi-rs/canvas uses .encode() (async) instead of the DOM .toDataURL() API
+      const imgBuffer: Buffer = await canvas.encode("png");
+
+      const ocrResult = await Tesseract.recognize(imgBuffer, "eng+mal", {
+        logger: () => {}, // suppress per-progress callbacks
+      });
+
+      const pageText: string = ocrResult.data.text?.trim() ?? "";
+      if (pageText.length > 10) {
+        pageTexts.push(pageText);
+      }
+    } catch (pageErr) {
+      console.error(`[ocrScannedPdf] Error on page ${pageNum}:`, pageErr);
+    }
+  }
+
+  if (pageTexts.length === 0) {
+    throw new Error(
+      "OCR produced no text — the PDF may be too degraded or all pages failed."
+    );
+  }
+
+  return pageTexts.join("\n\n");
+}
+
+/**
  * Extract text from documents — supports English and Malayalam (Unicode & UTF-16LE).
- * Handles: .docx (mammoth), .pdf (pdf-parse), .doc (word-extractor), .txt, .rtf
+ * Handles: .docx (mammoth), .pdf (pdf-parse + OCR fallback), .doc (word-extractor), .txt, .rtf
+ *
+ * For PDFs: first tries the text layer (fast, perfect Unicode for digital PDFs).
+ * If the text layer is too sparse (< 100 non-whitespace chars) the file is likely a
+ * scanned/image PDF — we fall back to pdfjs-dist page rendering + Tesseract OCR
+ * with the "eng+mal" language pack (English + Malayalam).
  */
 export async function extractDocText(filePath: string): Promise<string> {
   const ext = filePath.toLowerCase().split(".").pop();
@@ -329,14 +417,30 @@ export async function extractDocText(filePath: string): Promise<string> {
   }
 
   if (ext === "pdf") {
-    const pdfParse = await import("pdf-parse");
     const fs = await import("fs/promises");
     const buffer = await fs.readFile(filePath);
-    const pdf = (pdfParse as any).default || pdfParse;
-    // pdf-parse extracts Unicode text layers — works for Malayalam if PDF is text-based
-    // (scanned/image PDFs have no text layer and won't yield Malayalam without OCR)
-    const data = await pdf(buffer);
-    return data.text;
+
+    // --- Step 1: Try the text layer ---
+    let textLayerText = "";
+    try {
+      const pdfParse = await import("pdf-parse");
+      const pdf = (pdfParse as any).default || pdfParse;
+      const data = await pdf(buffer);
+      textLayerText = data.text?.trim() ?? "";
+    } catch {
+      // pdf-parse failed — likely a scanned/corrupt PDF with no text layer
+    }
+
+    // If the text layer has meaningful content, use it (digital PDF)
+    if (textLayerText.replace(/\s/g, "").length >= 100) {
+      return textLayerText;
+    }
+
+    // --- Step 2: Text layer is sparse → OCR the scanned pages ---
+    console.log(
+      `[extractDocText] PDF text layer too sparse (${textLayerText.replace(/\s/g, "").length} non-ws chars). Running OCR with eng+mal…`
+    );
+    return await ocrScannedPdf(buffer);
   }
 
   if (ext === "txt" || ext === "rtf") {
