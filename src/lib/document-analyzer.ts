@@ -150,6 +150,8 @@ export async function analyzeDocument(documentText: string): Promise<DocumentAna
 
 Your task is to extract structured party information from legal documents. The advocate filing these documents is typically G. Ananthakrishnan / K.B. Priya from Gourisankar Associates, Palakkad, Kerala.
 
+LANGUAGE: Documents may be in English, Malayalam (മലയാളം), or a mix of both — this is common in Kerala legal practice. You must read and understand Malayalam text fully. When extracting structured fields (names, addresses, amounts), transliterate Malayalam names/places to their standard English romanisation (e.g., "ശ്രീ കൃഷ്ണദാസ്" → "Sri Krishnadas"). Preserve the meaning accurately.
+
 IMPORTANT CONTEXT:
 - The advocate primarily represents banks and financial institutions (plaintiffs/petitioners) in recovery suits against individual borrowers (defendants/respondents).
 - In most cases: Plaintiff = Bank/NBFC (the advocate's CLIENT), Defendants = Individual borrowers (the OPPOSITION).
@@ -311,16 +313,17 @@ function fallbackPatternAnalysis(text: string): DocumentAnalysis {
 }
 
 /**
- * Extract text from .doc files using available system tools
+ * Extract text from documents — supports English and Malayalam (Unicode & UTF-16LE).
+ * Handles: .docx (mammoth), .pdf (pdf-parse), .doc (word-extractor), .txt, .rtf
  */
 export async function extractDocText(filePath: string): Promise<string> {
-  // For .doc files, we need special handling since mammoth only supports .docx
   const ext = filePath.toLowerCase().split(".").pop();
 
   if (ext === "docx") {
     const mammoth = await import("mammoth");
     const fs = await import("fs/promises");
     const buffer = await fs.readFile(filePath);
+    // mammoth preserves Unicode (Malayalam, etc.) from .docx files correctly
     const result = await mammoth.extractRawText({ buffer });
     return result.value;
   }
@@ -330,21 +333,34 @@ export async function extractDocText(filePath: string): Promise<string> {
     const fs = await import("fs/promises");
     const buffer = await fs.readFile(filePath);
     const pdf = (pdfParse as any).default || pdfParse;
+    // pdf-parse extracts Unicode text layers — works for Malayalam if PDF is text-based
+    // (scanned/image PDFs have no text layer and won't yield Malayalam without OCR)
     const data = await pdf(buffer);
     return data.text;
   }
 
   if (ext === "txt" || ext === "rtf") {
     const fs = await import("fs/promises");
+    // Read as UTF-8 — handles Malayalam Unicode in plain text files
     const text = await fs.readFile(filePath, "utf-8");
     return text;
   }
 
   if (ext === "doc") {
-    // Try reading as binary and extracting text content
-    const fs = await import("fs/promises");
-    const buffer = await fs.readFile(filePath);
-    return extractTextFromDoc(buffer);
+    // word-extractor properly decodes OLE compound .doc format including
+    // UTF-16LE encoded text — this correctly handles Malayalam characters
+    // (U+0D00–U+0D7F) that the old binary scanner missed.
+    try {
+      const WordExtractor = (await import("word-extractor")).default;
+      const extractor = new WordExtractor();
+      const doc = await extractor.extract(filePath);
+      return doc.getBody();
+    } catch {
+      // Last-resort fallback: binary scan (ASCII only — no Malayalam)
+      const fs = await import("fs/promises");
+      const buffer = await fs.readFile(filePath);
+      return extractTextFromDoc(buffer);
+    }
   }
 
   throw new Error(`Unsupported file type: .${ext}`);

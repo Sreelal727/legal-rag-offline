@@ -29,7 +29,9 @@ export async function POST(request: NextRequest) {
     const TesseractModule = await import("tesseract.js");
     const Tesseract = TesseractModule.default || TesseractModule;
 
-    const ocrPromise = Tesseract.recognize(buffer, "eng", {
+    // "eng+mal" — recognises both English and Malayalam (മലയാളം) script.
+    // Tesseract.js downloads language data on first use (~3MB for mal).
+    const ocrPromise = Tesseract.recognize(buffer, "eng+mal", {
       logger: () => {},
     });
 
@@ -64,18 +66,20 @@ export async function POST(request: NextRequest) {
     const llmResponse = await chatCompletion([
       {
         role: "system",
-        content: `You are a data extraction assistant. You will receive OCR text extracted from a handwritten note containing client/person details (typically written by a lawyer or clerk in India).
+        content: `You are a data extraction assistant. You will receive OCR text extracted from a handwritten note containing client/person details (typically written by a lawyer or clerk in India, Palakkad district, Kerala).
+
+LANGUAGE: The note may be in English, Malayalam (മലയാളം), or a mix of both. You must read and understand Malayalam text fully. Transliterate Malayalam names and addresses to English romanisation in the output fields (e.g., "ശ്രീ രാജൻ" → "Sri Rajan", "പാലക്കാട്" → "Palakkad").
 
 Extract whatever fields you can find and return ONLY a valid JSON object with these keys (use null for fields not found):
 {
-  "name": "Full name of the person",
+  "name": "Full name of the person (romanised if Malayalam)",
   "email": "Email address if present",
   "phone": "Phone/mobile number if present",
-  "address": "Full address if present",
+  "address": "Full address if present (romanised if Malayalam)",
   "panNumber": "PAN card number (format: ABCDE1234F) if present",
   "aadharNumber": "Aadhaar number (12 digits) if present",
   "gstNumber": "GST number if present",
-  "fatherName": "Father's or husband's name if present",
+  "fatherName": "Father's or husband's name if present (romanised if Malayalam)",
   "dob": "Date of birth if present",
   "gender": "Gender if present",
   "occupation": "Occupation/profession if present",
@@ -83,7 +87,8 @@ Extract whatever fields you can find and return ONLY a valid JSON object with th
 }
 
 IMPORTANT:
-- The text may be poorly recognized from handwriting, so use your best judgment to interpret misspellings or partial words
+- The text may be poorly recognized from handwriting — use best judgment to interpret misspellings or partial words
+- Malayalam OCR may produce imperfect output — infer context where possible
 - Indian names may have titles like Sri, Smt, Mr, Mrs — include them in the name
 - Phone numbers in India are typically 10 digits, sometimes with +91 prefix
 - Correct obvious OCR errors (e.g., "0" vs "O", "1" vs "l")

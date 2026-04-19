@@ -64,6 +64,8 @@ export async function POST(request: NextRequest) {
 
 You are given text extracted from multiple documents sent by a bank client for filing a money recovery suit. These documents may include: loan agreement, sanction letter, demand promissory note, hypothecation deed, guarantee deed, mortgage deed, acknowledgment of debt, bank ledger/statement of accounts, demand notice, etc.
 
+LANGUAGE: Documents may be in English, Malayalam (മലയാളം), or a mix of both — this is standard in Kerala banking practice. You must fully read and understand Malayalam text. When filling JSON fields, transliterate Malayalam names, addresses and place names to standard English romanisation (e.g., "ശ്രീ കൃഷ്ണദാസ്" → "Sri Krishnadas", "പാലക്കാട്" → "Palakkad"). Extract all amounts, dates, and account numbers correctly even when the surrounding text is in Malayalam.
+
 Your task: Extract a CONSOLIDATED DATA CARD from all documents combined.
 
 Return a JSON object with this EXACT structure:
