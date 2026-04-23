@@ -46,7 +46,8 @@ interface FormatSample {
   category: string;
   subcategory: string | null;
   description: string | null;
-  textContent: string;
+  // Loaded lazily in the preview dialog to keep the list payload small.
+  textContent?: string;
   fileName: string;
   fileSize: number;
   isActive: boolean;
@@ -396,7 +397,21 @@ export default function FormatLibraryPage() {
                     variant="outline"
                     size="sm"
                     className="flex-1"
-                    onClick={() => setPreviewSample(sample)}
+                    onClick={async () => {
+                      // Lightweight list doesn't carry textContent — fetch on demand.
+                      setPreviewSample(sample);
+                      if (!sample.textContent) {
+                        try {
+                          const res = await fetch(`/api/format-library/${sample.id}`);
+                          if (res.ok) {
+                            const full = await res.json();
+                            setPreviewSample({ ...sample, textContent: full.textContent });
+                          }
+                        } catch (err) {
+                          console.error("Failed to load preview:", err);
+                        }
+                      }
+                    }}
                   >
                     <Eye className="mr-1.5 h-3.5 w-3.5" /> Preview
                   </Button>
@@ -431,7 +446,9 @@ export default function FormatLibraryPage() {
             <p className="text-sm text-muted-foreground mb-3">{previewSample.description}</p>
           )}
           <div className="border rounded-md p-4 max-h-[55vh] overflow-y-auto bg-muted/30">
-            <pre className="text-sm whitespace-pre-wrap font-mono">{previewSample?.textContent}</pre>
+            <pre className="text-sm whitespace-pre-wrap font-mono">
+              {previewSample?.textContent ?? "Loading preview…"}
+            </pre>
           </div>
         </DialogContent>
       </Dialog>

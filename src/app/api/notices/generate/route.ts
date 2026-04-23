@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       instructions,
       formatSampleText
     );
-    const response = await chatCompletion(messages);
+    const response = await chatCompletion(messages, { maxTokens: 8192 });
     return NextResponse.json({ content: response });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });

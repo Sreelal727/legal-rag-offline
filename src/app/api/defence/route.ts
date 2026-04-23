@@ -159,7 +159,7 @@ Provide:
       { role: "user" as const, content: userPrompt },
     ];
 
-    const response = await chatCompletion(messages);
+    const response = await chatCompletion(messages, { maxTokens: 12288 });
 
     // If caseId, save the generated document
     let savedDocId: string | undefined;

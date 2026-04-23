@@ -16,47 +16,67 @@ async function gatherDatabaseContext(query: string, organizationId: string) {
   const sections: string[] = [];
   const q = query.toLowerCase();
 
-  // Always fetch summary counts
-  const [clientCount, caseCount, docCount, pendingNotices] = await Promise.all([
+  // All "always-fetched" context groups are independent of one another — run in parallel
+  // so total latency == slowest single query, not the sum of all of them.
+  const [
+    clientCount,
+    caseCount,
+    docCount,
+    pendingNotices,
+    cases,
+    clients,
+    upcomingHearings,
+    diaryEntries,
+  ] = await Promise.all([
     prisma.client.count({ where: { isActive: true, organizationId } }),
     prisma.case.count({ where: { status: { not: "CLOSED" }, organizationId } }),
     prisma.document.count({ where: { organizationId } }),
     prisma.notice.count({ where: { status: "PENDING_APPROVAL", organizationId } }),
+    prisma.case.findMany({
+      where: { status: { not: "CLOSED" }, organizationId },
+      include: {
+        caseClients: { include: { client: true } },
+        caseAssignments: { include: { user: { select: { name: true, role: true } } } },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 20,
+    }),
+    prisma.client.findMany({
+      where: { isActive: true, organizationId },
+      include: { _count: { select: { caseClients: true, invoices: true } } },
+      orderBy: { updatedAt: "desc" },
+      take: 30,
+    }),
+    prisma.case.findMany({
+      where: {
+        nextHearingDate: { gte: new Date() },
+        status: "ACTIVE",
+        organizationId,
+      },
+      orderBy: { nextHearingDate: "asc" },
+      take: 10,
+      include: { caseClients: { include: { client: true } } },
+    }),
+    prisma.diaryEntry.findMany({
+      where: { organizationId },
+      orderBy: { date: "desc" },
+      take: 15,
+      include: { case: { select: { caseNumber: true, title: true } } },
+    }),
   ]);
 
   sections.push(
     `[SYSTEM OVERVIEW]\nActive Clients: ${clientCount}\nOpen Cases: ${caseCount}\nDocuments: ${docCount}\nPending Notices: ${pendingNotices}`
   );
 
-  // Fetch cases (always useful context)
-  const cases = await prisma.case.findMany({
-    where: { status: { not: "CLOSED" }, organizationId },
-    include: {
-      caseClients: { include: { client: true } },
-      caseAssignments: { include: { user: { select: { name: true, role: true } } } },
-    },
-    orderBy: { updatedAt: "desc" },
-    take: 20,
-  });
-
   if (cases.length > 0) {
     const caseLines = cases.map((c) => {
-      const clients = c.caseClients.map((cc) => `${cc.client.name} (${cc.role})`).join(", ");
+      const caseClients = c.caseClients.map((cc) => `${cc.client.name} (${cc.role})`).join(", ");
       const advocates = c.caseAssignments.map((a) => a.user.name).join(", ");
-      return `- ${c.caseNumber} | ${c.title} | Type: ${c.caseType} | Status: ${c.status} | Priority: ${c.priority} | Court: ${c.courtName || "N/A"} | Judge: ${c.judge || "N/A"} | Next Hearing: ${fmt(c.nextHearingDate)} | Filing: ${fmt(c.filingDate)} | Clients: ${clients || "None"} | Advocates: ${advocates || "None"}`;
+      return `- ${c.caseNumber} | ${c.title} | Type: ${c.caseType} | Status: ${c.status} | Priority: ${c.priority} | Court: ${c.courtName || "N/A"} | Judge: ${c.judge || "N/A"} | Next Hearing: ${fmt(c.nextHearingDate)} | Filing: ${fmt(c.filingDate)} | Clients: ${caseClients || "None"} | Advocates: ${advocates || "None"}`;
     });
     sections.push(`[CASES]\n${caseLines.join("\n")}`);
   }
-
-  // Fetch clients
-  const clients = await prisma.client.findMany({
-    where: { isActive: true, organizationId },
-    include: {
-      _count: { select: { caseClients: true, invoices: true } },
-    },
-    orderBy: { updatedAt: "desc" },
-    take: 30,
-  });
 
   if (clients.length > 0) {
     const clientLines = clients.map((c) => {
@@ -65,18 +85,6 @@ async function gatherDatabaseContext(query: string, organizationId: string) {
     sections.push(`[CLIENTS]\n${clientLines.join("\n")}`);
   }
 
-  // Upcoming hearings & diary
-  const upcomingHearings = await prisma.case.findMany({
-    where: {
-      nextHearingDate: { gte: new Date() },
-      status: "ACTIVE",
-      organizationId,
-    },
-    orderBy: { nextHearingDate: "asc" },
-    take: 10,
-    include: { caseClients: { include: { client: true } } },
-  });
-
   if (upcomingHearings.length > 0) {
     const hearingLines = upcomingHearings.map((c) => {
       const clients = c.caseClients.map((cc) => cc.client.name).join(", ");
@@ -84,14 +92,6 @@ async function gatherDatabaseContext(query: string, organizationId: string) {
     });
     sections.push(`[UPCOMING HEARINGS]\n${hearingLines.join("\n")}`);
   }
-
-  // Diary entries
-  const diaryEntries = await prisma.diaryEntry.findMany({
-    where: { organizationId },
-    orderBy: { date: "desc" },
-    take: 15,
-    include: { case: { select: { caseNumber: true, title: true } } },
-  });
 
   if (diaryEntries.length > 0) {
     const diaryLines = diaryEntries.map((d) => {
@@ -442,7 +442,8 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const response = await chatCompletion(messages);
+    // Chat replies often include full drafted documents — keep the generous budget here.
+    const response = await chatCompletion(messages, { maxTokens: 16384 });
 
     // Parse action blocks and document blocks from AI response
     let displayMessage = response;

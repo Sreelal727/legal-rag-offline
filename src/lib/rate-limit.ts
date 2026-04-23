@@ -1,24 +1,52 @@
-// In-memory sliding window rate limiter
-// For production with multiple instances, replace with Redis-based implementation
+// In-memory sliding-window rate limiter.
+// Bounded store + proactive eviction so long-running processes don't leak.
+// For horizontal scaling, replace with Redis.
 
 interface RateLimitEntry {
   timestamps: number[];
+  lastSeen: number;
 }
+
+const MAX_ENTRIES = 50_000; // hard cap — evicts oldest if exceeded
+const IDLE_EVICT_MS = 30 * 60 * 1000; // entry is discarded 30min after last hit
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
 const store = new Map<string, RateLimitEntry>();
 
-// Clean up old entries periodically (every 5 minutes)
-setInterval(() => {
+function evictIdle() {
   const now = Date.now();
-  for (const [key, entry] of store.entries()) {
-    entry.timestamps = entry.timestamps.filter((t) => now - t < 60000 * 15);
-    if (entry.timestamps.length === 0) store.delete(key);
+  for (const [key, entry] of store) {
+    if (now - entry.lastSeen > IDLE_EVICT_MS) {
+      store.delete(key);
+    }
   }
-}, 5 * 60 * 1000);
+}
+
+function enforceMaxSize() {
+  if (store.size <= MAX_ENTRIES) return;
+  // Evict oldest (insertion order) until under cap
+  const overflow = store.size - MAX_ENTRIES;
+  let i = 0;
+  for (const key of store.keys()) {
+    if (i++ >= overflow) break;
+    store.delete(key);
+  }
+}
+
+// Only schedule the interval once in long-lived processes
+declare global {
+  // eslint-disable-next-line no-var
+  var __rateLimitCleanup: NodeJS.Timeout | undefined;
+}
+if (!globalThis.__rateLimitCleanup) {
+  globalThis.__rateLimitCleanup = setInterval(evictIdle, CLEANUP_INTERVAL_MS);
+  // Don't hold the event loop open just for cleanup
+  globalThis.__rateLimitCleanup.unref?.();
+}
 
 export interface RateLimitConfig {
-  windowMs: number; // Time window in milliseconds
-  maxRequests: number; // Max requests per window
+  windowMs: number;
+  maxRequests: number;
 }
 
 export const RATE_LIMITS = {
@@ -28,12 +56,28 @@ export const RATE_LIMITS = {
   passwordReset: { windowMs: 60 * 60 * 1000, maxRequests: 3 } as RateLimitConfig,
 };
 
-export function checkRateLimit(key: string, config: RateLimitConfig): { allowed: boolean; remaining: number; resetMs: number } {
+export function checkRateLimit(
+  key: string,
+  config: RateLimitConfig
+): { allowed: boolean; remaining: number; resetMs: number } {
   const now = Date.now();
-  const entry = store.get(key) || { timestamps: [] };
+  let entry = store.get(key);
+  if (!entry) {
+    entry = { timestamps: [], lastSeen: now };
+    store.set(key, entry);
+    enforceMaxSize();
+  }
 
-  // Remove timestamps outside the window
-  entry.timestamps = entry.timestamps.filter((t) => now - t < config.windowMs);
+  // Drop timestamps outside the window (in place — no new array)
+  const windowStart = now - config.windowMs;
+  let write = 0;
+  for (let read = 0; read < entry.timestamps.length; read++) {
+    if (entry.timestamps[read] >= windowStart) {
+      entry.timestamps[write++] = entry.timestamps[read];
+    }
+  }
+  entry.timestamps.length = write;
+  entry.lastSeen = now;
 
   if (entry.timestamps.length >= config.maxRequests) {
     const oldestInWindow = entry.timestamps[0];
@@ -42,7 +86,6 @@ export function checkRateLimit(key: string, config: RateLimitConfig): { allowed:
   }
 
   entry.timestamps.push(now);
-  store.set(key, entry);
 
   return {
     allowed: true,

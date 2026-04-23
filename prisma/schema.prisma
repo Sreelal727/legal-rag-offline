@@ -85,6 +85,8 @@ model User {
   passwordResetTokens PasswordResetToken[]
   scrutinyReports    ScrutinyReport[]
   caseDocuments      CaseDocument[]
+
+  @@index([organizationId, isActive])
 }
 
 model Session {
@@ -94,6 +96,9 @@ model Session {
   expiresAt DateTime
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model PasswordResetToken {
@@ -106,6 +111,9 @@ model PasswordResetToken {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   organizationId String
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model Client {
@@ -145,6 +153,11 @@ model Client {
   scrutinyReports   ScrutinyReport[]
   feeAgreements     FeeAgreement[]
   bankOpinions      BankOpinion[]
+
+  @@index([organizationId, isActive])
+  @@index([organizationId, clientType])
+  @@index([organizationId, name])
+  @@index([organizationId, updatedAt])
 }
 
 model Case {
@@ -212,6 +225,12 @@ model Case {
   accountStatements AccountStatement[]
   bankingMatters  BankingMatter[]
   executionPetitions ExecutionPetition[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, priority])
+  @@index([organizationId, updatedAt])
+  @@index([organizationId, nextHearingDate])
+  @@index([organizationId, filingDate])
 }
 
 model RevivalLetter {
@@ -228,6 +247,9 @@ model RevivalLetter {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   case           Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@index([organizationId])
 }
 
 model AccountStatement {
@@ -252,6 +274,9 @@ model AccountStatement {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   case           Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@index([organizationId])
 }
 
 model OppositeParty {
@@ -275,6 +300,8 @@ model OppositeParty {
   updatedAt         DateTime @updatedAt
   case              Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
   noticeRecipients  NoticeRecipient[]
+
+  @@index([caseId])
 }
 
 model CaseClient {
@@ -311,6 +338,8 @@ model CaseEvent {
   nextDate    DateTime?
   createdAt   DateTime @default(now())
   case        Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, date])
 }
 
 model Document {
@@ -331,6 +360,10 @@ model Document {
   case           Case?           @relation(fields: [caseId], references: [id], onDelete: SetNull)
   chunks         DocumentChunk[]
   propertyDocuments PropertyDocument[]
+
+  @@index([organizationId, createdAt])
+  @@index([caseId])
+  @@index([organizationId, isProcessed])
 }
 
 model DocumentChunk {
@@ -342,6 +375,8 @@ model DocumentChunk {
   chromaId   String?
   createdAt  DateTime @default(now())
   document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId])
 }
 
 model DiaryEntry {
@@ -359,6 +394,9 @@ model DiaryEntry {
   updatedAt      DateTime  @updatedAt
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   case           Case      @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, date])
+  @@index([caseId, date])
 }
 
 model ScheduleEvent {
@@ -375,6 +413,9 @@ model ScheduleEvent {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, date])
+  @@index([caseId])
 }
 
 model LimitationTracker {
@@ -399,6 +440,11 @@ model LimitationTracker {
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   case            Case?     @relation(fields: [caseId], references: [id], onDelete: SetNull)
   client          Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, status])
+  @@index([organizationId, deadlineDate])
+  @@index([caseId])
+  @@index([clientId])
 }
 
 model NoticeTemplate {
@@ -414,6 +460,8 @@ model NoticeTemplate {
   updatedAt      DateTime @updatedAt
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   notices        Notice[]
+
+  @@index([organizationId, isActive])
 }
 
 model Notice {
@@ -440,6 +488,12 @@ model Notice {
   approvals      NoticeApproval[]
   recipients     NoticeRecipient[]
   replies        NoticeReply[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, updatedAt])
+  @@index([caseId])
+  @@index([clientId])
+  @@index([templateId])
 }
 
 model NoticeApproval {
@@ -451,6 +505,9 @@ model NoticeApproval {
   createdAt DateTime @default(now())
   notice    Notice   @relation(fields: [noticeId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id])
+
+  @@index([noticeId])
+  @@index([userId])
 }
 
 model ChatSession {
@@ -465,6 +522,9 @@ model ChatSession {
   organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages       ChatMessage[]
+
+  @@index([organizationId, userId, updatedAt])
+  @@index([caseId])
 }
 
 model ChatMessage {
@@ -475,6 +535,8 @@ model ChatMessage {
   sources   String?
   createdAt DateTime    @default(now())
   session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
 }
 
 model AuditLog {
@@ -489,6 +551,10 @@ model AuditLog {
   createdAt      DateTime @default(now())
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([userId])
+  @@index([entity, entityId])
 }
 
 model TimeEntry {
@@ -511,6 +577,12 @@ model TimeEntry {
   case           Case?    @relation(fields: [caseId], references: [id], onDelete: SetNull)
   client         Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
   invoice        Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, userId, date])
+  @@index([caseId])
+  @@index([clientId])
+  @@index([invoiceId])
+  @@index([isBilled])
 }
 
 model Invoice {
@@ -535,6 +607,11 @@ model Invoice {
   case           Case?         @relation(fields: [caseId], references: [id], onDelete: SetNull)
   timeEntries    TimeEntry[]
   invoiceItems   InvoiceItem[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, createdAt])
+  @@index([clientId])
+  @@index([caseId])
 }
 
 model InvoiceItem {
@@ -546,6 +623,8 @@ model InvoiceItem {
   amount      Float
   sacCode     String? @default("998211")
   invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  @@index([invoiceId])
 }
 
 model FormatSample {
@@ -563,6 +642,9 @@ model FormatSample {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, isActive, category])
+  @@index([organizationId, updatedAt])
 }
 
 model DocumentSubmission {
@@ -588,6 +670,12 @@ model DocumentSubmission {
   client         Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
   assignee       User?     @relation("AssignedSubmissions", fields: [assignedTo], references: [id], onDelete: SetNull)
   creator        User      @relation("CreatedSubmissions", fields: [createdBy], references: [id])
+
+  @@index([organizationId, status])
+  @@index([organizationId, dueDate])
+  @@index([caseId])
+  @@index([clientId])
+  @@index([assignedTo])
 }
 
 model ScrutinyReport {
@@ -617,6 +705,11 @@ model ScrutinyReport {
   creator           User         @relation(fields: [createdBy], references: [id])
   propertyDocuments PropertyDocument[]
   deedChainNodes    DeedChainNode[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, updatedAt])
+  @@index([caseId])
+  @@index([clientId])
 }
 
 model PropertyDocument {
@@ -642,6 +735,9 @@ model PropertyDocument {
   scrutinyReport     ScrutinyReport @relation(fields: [scrutinyReportId], references: [id], onDelete: Cascade)
   document           Document?      @relation(fields: [documentId], references: [id], onDelete: SetNull)
   deedChainNodes     DeedChainNode[]
+
+  @@index([scrutinyReportId, sortOrder])
+  @@index([documentId])
 }
 
 model DeedChainNode {
@@ -673,6 +769,9 @@ model DeedChainNode {
   updatedAt          DateTime  @updatedAt
   scrutinyReport     ScrutinyReport   @relation(fields: [scrutinyReportId], references: [id], onDelete: Cascade)
   propertyDocument   PropertyDocument? @relation(fields: [propertyDocumentId], references: [id], onDelete: SetNull)
+
+  @@index([scrutinyReportId])
+  @@index([propertyDocumentId])
 }
 
 model NoticeRecipient {
@@ -698,6 +797,9 @@ model NoticeRecipient {
   notice            Notice         @relation(fields: [noticeId], references: [id], onDelete: Cascade)
   oppositeParty     OppositeParty? @relation(fields: [oppositePartyId], references: [id], onDelete: SetNull)
   replies           NoticeReply[]
+
+  @@index([noticeId])
+  @@index([oppositePartyId])
 }
 
 model NoticeReply {
@@ -713,6 +815,9 @@ model NoticeReply {
   updatedAt     DateTime  @updatedAt
   notice        Notice          @relation(fields: [noticeId], references: [id], onDelete: Cascade)
   recipient     NoticeRecipient? @relation(fields: [recipientId], references: [id], onDelete: SetNull)
+
+  @@index([noticeId])
+  @@index([recipientId])
 }
 
 model CaseTemplate {
@@ -731,6 +836,8 @@ model CaseTemplate {
 
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   caseDocuments   CaseDocument[]
+
+  @@index([organizationId, isActive, category])
 }
 
 model CaseDocument {
@@ -754,6 +861,10 @@ model CaseDocument {
   template        CaseTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
   organization    Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   creator         User          @relation(fields: [generatedBy], references: [id])
+
+  @@index([organizationId, status])
+  @@index([caseId])
+  @@index([templateId])
 }
 
 model CourtFeeEntry {
@@ -772,6 +883,9 @@ model CourtFeeEntry {
   case           Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   creator        User     @relation(fields: [createdBy], references: [id])
+
+  @@index([organizationId, isPaid])
+  @@index([caseId])
 }
 
 model FeeAgreement {
@@ -794,6 +908,10 @@ model FeeAgreement {
   case           Case?    @relation(fields: [caseId], references: [id], onDelete: SetNull)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   creator        User     @relation(fields: [createdBy], references: [id])
+
+  @@index([organizationId, status])
+  @@index([clientId])
+  @@index([caseId])
 }
 
 model BankOpinion {
@@ -815,6 +933,10 @@ model BankOpinion {
   client         Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   creator        User     @relation(fields: [createdBy], references: [id])
+
+  @@index([organizationId, status])
+  @@index([caseId])
+  @@index([clientId])
 }
 
 // ============================================================
@@ -839,6 +961,11 @@ model BankingMatter {
   case            Case?    @relation(fields: [caseId], references: [id], onDelete: SetNull)
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   matterDocuments MatterDocument[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, currentStage])
+  @@index([organizationId, updatedAt])
+  @@index([caseId])
 }
 
 model MatterDocument {
@@ -856,6 +983,9 @@ model MatterDocument {
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
   matter          BankingMatter @relation(fields: [matterId], references: [id], onDelete: Cascade)
+
+  @@index([matterId, sortOrder])
+  @@index([matterId, documentType])
 }
 
 model ExecutionPetition {
@@ -878,4 +1008,7 @@ model ExecutionPetition {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
   case                  Case     @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId])
+  @@index([organizationId, status])
 }

@@ -101,13 +101,16 @@ Generate a comprehensive scrutiny report with these sections:
 
 Use formal legal language. Reference specific document numbers and dates. Flag all issues clearly.`;
 
-  const content = await chatCompletion([
-    { role: "system", content: systemPrompt },
-    {
-      role: "user",
-      content: `Generate the complete scrutiny report using this data:\n\n${structuredData}`,
-    },
-  ]);
+  const content = await chatCompletion(
+    [
+      { role: "system", content: systemPrompt },
+      {
+        role: "user",
+        content: `Generate the complete scrutiny report using this data:\n\n${structuredData}`,
+      },
+    ],
+    { maxTokens: 12288 }
+  );
 
   return content as string;
 }

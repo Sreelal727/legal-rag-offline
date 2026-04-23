@@ -22,6 +22,9 @@ export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const category = searchParams.get("category");
   const activeOnly = searchParams.get("active") !== "false";
+  // `full=true` keeps the legacy heavy payload (callers that need textContent
+  // server-side). Default omits textContent to keep the list response light.
+  const includeContent = searchParams.get("full") === "true";
 
   const where: any = { organizationId: getOrgId(session!) };
   if (category) where.category = category;
@@ -36,7 +39,7 @@ export async function GET(request: NextRequest) {
       category: true,
       subcategory: true,
       description: true,
-      textContent: true,
+      textContent: includeContent,
       filePath: true,
       fileName: true,
       fileSize: true,

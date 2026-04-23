@@ -2,12 +2,35 @@ const LLM_API_KEY = process.env.LLM_API_KEY || "";
 const LLM_BASE_URL = process.env.LLM_BASE_URL || "https://openrouter.ai/api/v1";
 const LLM_MODEL = process.env.LLM_MODEL || "mistralai/Mistral-7B-Instruct-v0.3";
 
+// Sensible default — fits short answers and most extractions without wasting
+// tokens on generation budget the model never uses. Callers that need to draft
+// full-length legal documents pass a larger cap explicitly.
+const DEFAULT_MAX_TOKENS = Number(process.env.LLM_MAX_TOKENS) || 4096;
+const DEFAULT_TEMPERATURE = 0.4;
+
 interface ChatMessage {
   role: "system" | "user" | "assistant";
   content: string;
 }
 
-export async function chatCompletion(messages: ChatMessage[], stream = false) {
+export interface ChatCompletionOptions {
+  stream?: boolean;
+  maxTokens?: number;
+  temperature?: number;
+  signal?: AbortSignal;
+}
+
+function resolveOptions(opts: boolean | ChatCompletionOptions | undefined): ChatCompletionOptions {
+  if (typeof opts === "boolean") return { stream: opts };
+  return opts || {};
+}
+
+export async function chatCompletion(
+  messages: ChatMessage[],
+  options: boolean | ChatCompletionOptions = false
+): Promise<any> {
+  const { stream = false, maxTokens, temperature, signal } = resolveOptions(options);
+
   const response = await fetch(`${LLM_BASE_URL}/chat/completions`, {
     method: "POST",
     headers: {
@@ -18,9 +41,10 @@ export async function chatCompletion(messages: ChatMessage[], stream = false) {
       model: LLM_MODEL,
       messages,
       stream,
-      temperature: 0.4,
-      max_tokens: 16384,
+      temperature: temperature ?? DEFAULT_TEMPERATURE,
+      max_tokens: maxTokens ?? DEFAULT_MAX_TOKENS,
     }),
+    signal,
   });
 
   if (!response.ok) {
