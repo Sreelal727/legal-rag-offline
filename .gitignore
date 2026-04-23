@@ -48,3 +48,6 @@ dev.db
 
 # Uploaded files
 uploads/
+
+# Pilot / throwaway extraction runs
+pilot-output/
