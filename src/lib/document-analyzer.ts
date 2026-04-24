@@ -430,13 +430,12 @@ export async function extractDocText(filePath: string): Promise<string> {
     const fs = await import("fs/promises");
     const buffer = await fs.readFile(filePath);
 
-    // --- Step 1: Try the text layer ---
+    // --- Step 1: Try the text layer (pdf-parse v2 API) ---
     let textLayerText = "";
     try {
-      const pdfParse = await import("pdf-parse");
-      const pdf = (pdfParse as any).default || pdfParse;
-      const data = await pdf(buffer);
-      textLayerText = data.text?.trim() ?? "";
+      const { PDFParse } = await import("pdf-parse") as any;
+      const result = await new PDFParse({ data: buffer }).getText();
+      textLayerText = result.text?.trim() ?? "";
     } catch {
       // pdf-parse failed — likely a scanned/corrupt PDF with no text layer
     }

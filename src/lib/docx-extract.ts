@@ -101,15 +101,14 @@ export async function extractTextFromDoc(filePath: string): Promise<string> {
 export async function extractTextFromPdf(filePath: string): Promise<string> {
   const buffer = readFileSync(filePath);
 
-  // --- Step 1: Try the text layer ---
+  // --- Step 1: Try the text layer (pdf-parse v2 API) ---
   let textLayerText = "";
   try {
-    const pdfParse = await import("pdf-parse");
-    const pdf = (pdfParse as any).default || pdfParse;
-    const data = await pdf(buffer);
-    textLayerText = data.text?.trim() ?? "";
+    const { PDFParse } = await import("pdf-parse") as any;
+    const result = await new PDFParse({ data: buffer }).getText();
+    textLayerText = result.text?.trim() ?? "";
   } catch (e: any) {
-    console.error("pdf-parse failed:", e?.message);
+    console.error("pdf-parse v2 failed:", e?.message);
   }
 
   // Digital PDF — has meaningful text layer

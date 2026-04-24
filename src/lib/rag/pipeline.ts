@@ -3,7 +3,6 @@ import { chunkText } from "./chunker";
 import { generateEmbedding, generateEmbeddings } from "./embeddings";
 import { addDocuments, searchDocuments, deleteDocumentChunks } from "./vectorstore";
 import { v4 as uuid } from "uuid";
-import * as pdfParse from "pdf-parse";
 import * as mammoth from "mammoth";
 import fs from "fs/promises";
 import path from "path";
@@ -13,9 +12,10 @@ export async function extractText(filePath: string, fileType: string): Promise<s
   const buffer = await fs.readFile(absolutePath);
 
   if (fileType === "application/pdf" || filePath.endsWith(".pdf")) {
-    const pdf = (pdfParse as any).default || pdfParse;
-    const data = await pdf(buffer);
-    return data.text;
+    // pdf-parse v2 API: class-based, not a function
+    const { PDFParse } = await import("pdf-parse") as any;
+    const result = await new PDFParse({ data: buffer }).getText();
+    return result.text;
   }
 
   if (
