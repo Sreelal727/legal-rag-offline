@@ -330,9 +330,19 @@ export async function ocrScannedPdf(pdfBuffer: Buffer): Promise<string> {
   const pdfjsModule = (await import("pdfjs-dist/legacy/build/pdf.mjs")) as any;
   const pdfjs = pdfjsModule.default ?? pdfjsModule;
 
-  // Disable the background worker — in Node.js we render in the main thread.
-  // Setting workerSrc to "" activates pdfjs-dist's built-in "fake" worker.
-  pdfjs.GlobalWorkerOptions.workerSrc = "";
+  // pdfjs-dist v5 requires workerSrc even in Node.js — point it at the actual
+  // worker .mjs file using a file:// URL so Node.js Worker threads can load it.
+  const pathMod = await import("path");
+  const urlMod  = await import("url");
+  const workerPath = pathMod.join(
+    process.cwd(),
+    "node_modules",
+    "pdfjs-dist",
+    "legacy",
+    "build",
+    "pdf.worker.mjs"
+  );
+  pdfjs.GlobalWorkerOptions.workerSrc = urlMod.pathToFileURL(workerPath).href;
 
   const { createCanvas } = (await import("@napi-rs/canvas")) as any;
 
