@@ -135,6 +135,20 @@ export default function BankOpinionPage() {
     propertyAddress: "",
     loanAmount: "",
     caseId: "",
+    // Fields auto-filled from document extraction
+    documentsExamined: "",
+    chainOfTitle: "",
+    ecPeriodFrom: "",
+    ecPeriodTo: "",
+    legalHeirs: "",
+    governmentDues: "",
+    litigation: "",
+    encumbrances: "",
+    marketability: "",
+    propertySchedule: "",
+    advocateName: "G. Ananthakrishnan",
+    barCouncilNumber: "KER/123/2001",
+    place: "Palakkad",
   });
 
   const fetchOpinions = useCallback(async () => {
@@ -190,29 +204,41 @@ export default function BankOpinionPage() {
 
       const x = data.extracted ?? {};
 
-      // Map extracted fields to the form
-      // ownerName is the property owner = borrower for bank opinion purposes
-      const borrower = x.ownerName || "";
-      const loanAmt  = x.loanAmount ? String(x.loanAmount) : "";
-
-      // Build a readable property address from individual fields
-      const parts = [
+      // Build property address from granular fields if a combined one isn't present
+      const addrParts = [
         x.propertyAddress,
         x.surveyNumber ? `Survey No. ${x.surveyNumber}` : null,
         x.village,
-        x.taluk,
-        x.district,
+        x.taluk ? `${x.taluk} Taluk` : null,
+        x.district ? `${x.district} District` : null,
         x.totalExtent ? `Extent: ${x.totalExtent}` : null,
       ].filter(Boolean);
-      const propertyAddr = parts.join(", ");
+      const propertyAddr = addrParts.join(", ");
+
+      // Build borrower description
+      const borrower = [
+        x.ownerName,
+        x.fatherHusbandName ? `S/o ${x.fatherHusbandName}` : null,
+        x.ownerAge ? `Age ${x.ownerAge}` : null,
+      ].filter(Boolean).join(", ");
 
       setForm((prev) => ({
         ...prev,
-        borrowerName:    borrower    || prev.borrowerName,
-        loanAmount:      loanAmt     || prev.loanAmount,
-        propertyAddress: propertyAddr || prev.propertyAddress,
-        bankName:        x.bankName  || prev.bankName,
-        branchName:      x.branchName || prev.branchName,
+        borrowerName:      x.ownerName          || prev.borrowerName,
+        loanAmount:        x.loanAmount ? String(x.loanAmount) : prev.loanAmount,
+        propertyAddress:   propertyAddr          || prev.propertyAddress,
+        propertySchedule:  x.propertySchedule   || propertyAddr || prev.propertySchedule,
+        bankName:          x.bankName            || prev.bankName,
+        branchName:        x.branchName          || prev.branchName,
+        documentsExamined: x.documentsExamined   || prev.documentsExamined,
+        chainOfTitle:      x.chainOfTitle        || prev.chainOfTitle,
+        ecPeriodFrom:      x.ecPeriodFrom        || prev.ecPeriodFrom,
+        ecPeriodTo:        x.ecPeriodTo          || prev.ecPeriodTo,
+        legalHeirs:        x.legalHeirs          || prev.legalHeirs,
+        governmentDues:    x.governmentDues      || prev.governmentDues,
+        litigation:        x.litigation          || prev.litigation,
+        encumbrances:      x.encumbrances        || prev.encumbrances,
+        marketability:     x.marketability       || prev.marketability,
       }));
 
       setDocExtracted(true);
@@ -226,20 +252,25 @@ export default function BankOpinionPage() {
 
   const getFilledContent = () => {
     return currentTemplate
-      .replace(/\{\{bankName\}\}/g, form.bankName)
-      .replace(/\{\{branchName\}\}/g, form.branchName)
-      .replace(/\{\{borrowerName\}\}/g, form.borrowerName)
-      .replace(/\{\{propertyAddress\}\}/g, form.propertyAddress)
-      .replace(/\{\{propertySchedule\}\}/g, form.propertyAddress)
-      .replace(/\{\{loanAmount\}\}/g, form.loanAmount)
-      .replace(/\{\{date\}\}/g, format(new Date(), "dd/MM/yyyy"))
-      .replace(/\{\{place\}\}/g, "Palakkad")
-      .replace(/\{\{documentsExamined\}\}/g, "1. [List of documents furnished]")
-      .replace(/\{\{chainOfTitle\}\}/g, "[Describe the chain of title]")
-      .replace(/\{\{ecPeriodFrom\}\}/g, "[year]")
-      .replace(/\{\{ecPeriodTo\}\}/g, "[year]")
-      .replace(/\{\{legalHeirs\}\}/g, "[Not applicable / Details]")
-      .replace(/\{\{governmentDues\}\}/g, "[Other dues if any]");
+      .replace(/\{\{bankName\}\}/g,          form.bankName          || "[Bank Name]")
+      .replace(/\{\{branchName\}\}/g,        form.branchName        || "[Branch Name]")
+      .replace(/\{\{borrowerName\}\}/g,      form.borrowerName      || "[Borrower Name]")
+      .replace(/\{\{propertyAddress\}\}/g,   form.propertyAddress   || "[Property Address]")
+      .replace(/\{\{propertySchedule\}\}/g,  form.propertySchedule  || form.propertyAddress || "[Property Schedule]")
+      .replace(/\{\{loanAmount\}\}/g,        form.loanAmount        || "[Loan Amount]")
+      .replace(/\{\{documentsExamined\}\}/g, form.documentsExamined || "1. [List of documents furnished]")
+      .replace(/\{\{chainOfTitle\}\}/g,      form.chainOfTitle      || "[Describe the chain of title]")
+      .replace(/\{\{ecPeriodFrom\}\}/g,      form.ecPeriodFrom      || "[year]")
+      .replace(/\{\{ecPeriodTo\}\}/g,        form.ecPeriodTo        || "[year]")
+      .replace(/\{\{legalHeirs\}\}/g,        form.legalHeirs        || "Not applicable")
+      .replace(/\{\{governmentDues\}\}/g,    form.governmentDues    || "[Government dues status]")
+      .replace(/\{\{litigation\}\}/g,        form.litigation        || "No litigation noted")
+      .replace(/\{\{encumbrances\}\}/g,      form.encumbrances      || "Nil")
+      .replace(/\{\{marketability\}\}/g,     form.marketability     || "Title appears clear and marketable")
+      .replace(/\{\{advocateName\}\}/g,      form.advocateName      || "G. Ananthakrishnan")
+      .replace(/\{\{barCouncilNumber\}\}/g,  form.barCouncilNumber  || "[Bar Council No.]")
+      .replace(/\{\{date\}\}/g,              format(new Date(), "dd/MM/yyyy"))
+      .replace(/\{\{place\}\}/g,             form.place             || "Palakkad");
   };
 
   const handleCreate = async () => {
@@ -264,7 +295,7 @@ export default function BankOpinionPage() {
     if (res.ok) {
       toast.success("Bank opinion created");
       setCreateOpen(false);
-      setForm({ bankClientId: "", bankName: "", branchName: "", borrowerName: "", propertyAddress: "", loanAmount: "", caseId: "" });
+      setForm({ bankClientId: "", bankName: "", branchName: "", borrowerName: "", propertyAddress: "", loanAmount: "", caseId: "", documentsExamined: "", chainOfTitle: "", ecPeriodFrom: "", ecPeriodTo: "", legalHeirs: "", governmentDues: "", litigation: "", encumbrances: "", marketability: "", propertySchedule: "", advocateName: "G. Ananthakrishnan", barCouncilNumber: "KER/123/2001", place: "Palakkad" });
       setDocExtracted(false);
       fetchOpinions();
     } else {

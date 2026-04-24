@@ -63,51 +63,66 @@ export async function POST(request: NextRequest) {
   }
 
   // ── LLM extraction ────────────────────────────────────────────────────────
-  const systemPrompt = `You are a legal document analyzer for Gourisankar Associates, a law firm in Palakkad, Kerala, India. You specialise in banking and property law documents.
+  const systemPrompt = `You are a legal document analyzer for Gourisankar Associates, a law firm in Palakkad, Kerala, India. You specialise in banking and property law documents used when preparing bank legal opinions (title opinions).
 
-LANGUAGE: The document may be written in English, Malayalam (മലയാളം), or a mix of both — this is completely normal in Kerala land records, bank documents, and title deeds. You MUST fully read and understand Malayalam text. When filling JSON fields, transliterate Malayalam names, addresses, and place names to standard English romanisation (e.g., "ശ്രീ കൃഷ്ണദാസ്" → "Sri Krishnadas", "പാലക്കാട്" → "Palakkad", "ആലത്തൂർ" → "Alathur"). Keep survey numbers, amounts, and dates as-is.
+LANGUAGE: The document may be in English, Malayalam (മലയാളം), or a mix. You MUST fully read and understand Malayalam. Transliterate all Malayalam names, addresses, village/taluk/district names to standard English romanisation (e.g., "ശ്രീ കൃഷ്ണദാസ്" → "Sri Krishnadas", "പാലക്കാട്" → "Palakkad", "ആലത്തൂർ" → "Alathur"). Preserve survey numbers, amounts, and dates as-is.
 
-DOCUMENT TYPES: The document may be any of the following related to a bank loan or property title:
-- Title deed / Sale deed / Gift deed / Partition deed
-- Encumbrance Certificate (EC)
-- Patta / Chitta / Adangal (land records)
+DOCUMENT TYPES you may receive (one or more at once):
+- Title deed / Sale deed / Gift deed / Partition deed / Settlement deed
+- Encumbrance Certificate (EC / ഭാരബാധ്യതാ സർട്ടിഫിക്കറ്റ്)
+- Patta / Chitta / Adangal / Thandaper (land revenue records)
 - Possession Certificate
-- Property tax receipt
-- Loan agreement / Sanction letter / Offer letter
+- Property tax receipt / Demand notice
+- Loan agreement / Sanction letter / Offer letter / Term sheet
 - Mortgage deed / Hypothecation agreement
-- Valuation report
-- Survey sketch
+- Valuation / Inspection report
+- Survey sketch / FMB sketch
+- Legal heir certificate
+- Death certificate
 
-YOUR TASK: Extract the following fields from the document and return ONLY a valid JSON object. Use null for any field not found.
+YOUR TASK: Extract EVERY field below from the document. This will be used to auto-fill a bank legal opinion letter. Use null only if the information is genuinely absent.
+
+Return ONLY a valid JSON object with these exact keys:
 
 {
-  "ownerName": "Full name of the property owner / borrower / loan applicant (romanised)",
-  "fatherHusbandName": "Father's or husband's name if present (romanised)",
-  "ownerAddress": "Residential address of the owner if present (romanised)",
-  "bankName": "Name of the bank or financial institution mentioned (e.g., 'State Bank of India')",
-  "branchName": "Branch name if mentioned (e.g., 'Palakkad Main Branch')",
-  "loanAmount": "Loan amount as a number (digits only, no currency symbols) or null",
-  "propertyAddress": "Full address/location of the property (romanised)",
-  "surveyNumber": "Survey number(s) of the property if present",
+  "ownerName": "Full name of current property owner / borrower / loan applicant (romanised). Include title like Sri/Smt.",
+  "fatherHusbandName": "Father's name (S/o) or husband's name (W/o) of the owner (romanised)",
+  "ownerAge": "Age of the owner as a number if mentioned, else null",
+  "ownerAddress": "Full residential address of the owner (romanised)",
+  "bankName": "Full name of the bank or financial institution (e.g., 'State Bank of India'). null if not mentioned.",
+  "branchName": "Bank branch name (e.g., 'Palakkad Main Branch'). null if not mentioned.",
+  "loanAmount": "Sanctioned / proposed loan amount as a plain number with no currency symbols (e.g., 1500000). null if not found.",
+  "loanPurpose": "Purpose of the loan if stated (e.g., 'Home Loan', 'Agricultural Loan', 'Business Loan'). null if not found.",
+  "propertyAddress": "Complete location/address of the mortgaged / title property (romanised)",
+  "surveyNumber": "All survey / re-survey / sub-division numbers of the property, comma-separated if multiple",
   "village": "Revenue village name (romanised)",
   "taluk": "Taluk name (romanised)",
   "district": "District name (romanised, e.g., 'Palakkad')",
-  "totalExtent": "Total area/extent of the property (e.g., '10 cents', '0.25 acres', '1000 sq ft')",
-  "documentDate": "Date of the document in DD/MM/YYYY format if present",
-  "documentType": "Type of document detected (e.g., 'Sale Deed', 'Encumbrance Certificate', 'Loan Agreement', 'Title Deed', etc.)",
-  "ecPeriodFrom": "EC period start year if this is an EC (e.g., '2000')",
-  "ecPeriodTo": "EC period end year if this is an EC (e.g., '2024')",
-  "priorOwners": "Chain of title / prior owners if mentioned (brief summary)",
-  "encumbrances": "Any encumbrances/liabilities noted, or 'Nil' if none",
-  "notes": "Any other important details not captured above"
+  "totalExtent": "Total area or extent of the property with unit (e.g., '10 cents', '0.25 acres', '1000 sq ft', '2 Are 50 Sqm')",
+  "propertySchedule": "The full schedule / description of the property as it appears in the deed (romanised, multi-line is fine)",
+  "documentDate": "Date of the primary document in DD/MM/YYYY format",
+  "documentType": "Type of document (e.g., 'Sale Deed', 'Encumbrance Certificate', 'Loan Agreement', 'Title Deed', 'Patta', 'Tax Receipt')",
+  "documentsExamined": "Numbered list of ALL documents mentioned or furnished in this file. Format as: '1. Sale Deed dated 12/03/2010 by Sri Rajan to Sri Mohan\\n2. Encumbrance Certificate for 2000-2024\\n3. Patta No. 1234'. List every document mentioned.",
+  "chainOfTitle": "Chronological chain of ownership from earliest to current owner. Format: 'Originally owned by [Name]. Transferred to [Name] by Sale Deed dated [date]. Currently owned by [Name].' Mention each transfer.",
+  "ecPeriodFrom": "Start year of the Encumbrance Certificate period (4-digit year, e.g., '2000'). null if no EC.",
+  "ecPeriodTo": "End year of the Encumbrance Certificate period (4-digit year, e.g., '2024'). null if no EC.",
+  "encumbrances": "Any encumbrances, mortgages, charges, or liabilities noted in EC or deed. Write 'Nil' if none found.",
+  "legalHeirs": "Names and relationship of legal heirs if mentioned (e.g., death of a prior owner). Write 'Not applicable' if no succession issue.",
+  "governmentDues": "Status of property tax, water tax, electricity dues, or other government dues. E.g., 'Property tax paid up to 2024-25. No arrears.' Write 'Not mentioned' if absent.",
+  "litigation": "Any litigation, court cases, or disputes mentioned relating to the property. Write 'No litigation noted' if none.",
+  "marketability": "Any observations on marketability or title defects. Write 'Title appears clear and marketable' if nothing adverse found.",
+  "valuationAmount": "Estimated market value or guideline value of the property if mentioned in a valuation report. null if not found.",
+  "registrationDetails": "Document registration number, SRO (Sub-Registrar Office), and registration date if mentioned.",
+  "notes": "Any other important details not captured above — unusual clauses, conditions, caveats, co-owners, etc."
 }
 
-IMPORTANT RULES:
-- Always transliterate Malayalam to English in the output fields
-- For loanAmount, return ONLY the number (e.g., 650000 not "Rs. 6,50,000")
-- If the document mentions multiple survey numbers, list them all in surveyNumber
-- If no bank is mentioned, set bankName to null
-- Return ONLY the JSON object — no markdown, no explanation, no prefix text`;
+RULES:
+- Transliterate ALL Malayalam text in the output fields to English romanisation
+- loanAmount must be a plain number (no Rs., no commas, no /-)
+- documentsExamined: be thorough — list every document referenced anywhere in the text
+- chainOfTitle: reconstruct the ownership history even if scattered across the document
+- If the document is an EC, extract the EC period, all entries as encumbrances, and infer chain of title from the entries
+- Return ONLY the JSON object — no markdown code fences, no explanation text before or after`;
 
   let extracted: Record<string, any> = {};
   try {
@@ -115,7 +130,7 @@ IMPORTANT RULES:
       { role: "system", content: systemPrompt },
       {
         role: "user",
-        content: `Extract the fields from this document:\n\n${documentText.substring(0, 12000)}`,
+        content: `Extract all fields from this document. Be thorough — check every paragraph for the requested information:\n\n${documentText.substring(0, 20000)}`,
       },
     ]) as string;
 
