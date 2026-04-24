@@ -168,32 +168,57 @@ export default function BankOpinionPage() {
     }));
   };
 
-  // Upload documents and extract details using document analyzer
+  // Upload title document and extract property / borrower details
   const handleDocUpload = async (file: File) => {
     setUploading(true);
     setDocExtracted(false);
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch("/api/documents/analyze-parties", { method: "POST", body: fd });
-      if (!res.ok) throw new Error("Analysis failed");
+      const res = await fetch("/api/bank-opinions/extract-document", { method: "POST", body: fd });
+
       const data = await res.json();
 
-      // Extract borrower (first defendant) and property info
-      const borrower = data.defendants?.[0]?.name || data.plaintiff?.name || "";
-      const loanAmt = data.loanAmount?.toString() || "";
+      if (!res.ok) {
+        toast.error(data.error || "Could not extract info from document");
+        return;
+      }
+
+      if (data.warning) {
+        toast.warning(data.warning);
+      }
+
+      const x = data.extracted ?? {};
+
+      // Map extracted fields to the form
+      // ownerName is the property owner = borrower for bank opinion purposes
+      const borrower = x.ownerName || "";
+      const loanAmt  = x.loanAmount ? String(x.loanAmount) : "";
+
+      // Build a readable property address from individual fields
+      const parts = [
+        x.propertyAddress,
+        x.surveyNumber ? `Survey No. ${x.surveyNumber}` : null,
+        x.village,
+        x.taluk,
+        x.district,
+        x.totalExtent ? `Extent: ${x.totalExtent}` : null,
+      ].filter(Boolean);
+      const propertyAddr = parts.join(", ");
 
       setForm((prev) => ({
         ...prev,
-        borrowerName: borrower || prev.borrowerName,
-        loanAmount: loanAmt || prev.loanAmount,
-        propertyAddress: prev.propertyAddress,
+        borrowerName:    borrower    || prev.borrowerName,
+        loanAmount:      loanAmt     || prev.loanAmount,
+        propertyAddress: propertyAddr || prev.propertyAddress,
+        bankName:        x.bankName  || prev.bankName,
+        branchName:      x.branchName || prev.branchName,
       }));
 
       setDocExtracted(true);
-      toast.success(`Document read: ${data.documentType || "Legal document"} — fields auto-filled`);
+      toast.success(`${data.documentType || "Document"} read — fields auto-filled`);
     } catch {
-      toast.error("Could not extract info from document");
+      toast.error("Could not extract info from document. Please fill in the details manually.");
     } finally {
       setUploading(false);
     }
