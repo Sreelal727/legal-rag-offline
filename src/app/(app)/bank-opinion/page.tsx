@@ -137,6 +137,14 @@ function dedupeAndSort(incoming: OwnershipEntry[], existing: OwnershipEntry[]): 
     });
 }
 
+interface BankFormat {
+  found: boolean;
+  bankFolder: string;
+  fileName?: string;
+  text?: string;
+  reason?: string;
+}
+
 interface BankOpinion {
   id: string;
   bankName: string;
@@ -171,23 +179,27 @@ export default function BankOpinionPage() {
 
   // Document upload / analysis
   const [uploading, setUploading] = useState(false);
+  const [generating, setGenerating] = useState(false);
   const [docExtracted, setDocExtracted] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<string[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Chain of title
   const [chainEntries, setChainEntries] = useState<OwnershipEntry[]>([]);
-  const [buildingChain, setBuildingChain] = useState(false);
-  const chainFileRef = useRef<HTMLInputElement>(null);
+
+  // Bank format reference (from D:\anadhakrishnan archive)
+  const [bankFormat, setBankFormat] = useState<BankFormat | null>(null);
+  const [fetchingFormat, setFetchingFormat] = useState(false);
+  const bankFormatFetchedRef = useRef(false);
 
   const [form, setForm] = useState({
-    bankClientId: "",   // selected from client list
+    bankClientId: "",
     bankName: "",
     branchName: "",
     borrowerName: "",
     propertyAddress: "",
     loanAmount: "",
     caseId: "",
-    // Fields auto-filled from document extraction
     documentsExamined: "",
     chainOfTitle: "",
     ecPeriodFrom: "",
@@ -212,14 +224,12 @@ export default function BankOpinionPage() {
   }, []);
 
   useEffect(() => {
-    // Load saved template from localStorage
     const saved = localStorage.getItem("bankOpinionTemplate");
     if (saved) { setCurrentTemplate(saved); setEditingTemplate(saved); }
 
     Promise.all([
       fetchOpinions(),
       fetch("/api/cases?limit=200").then((r) => r.json()).then((d) => setCases(d.cases || [])),
-      // Fetch company-type clients (banks)
       fetch("/api/clients?clientType=COMPANY&limit=500").then((r) => r.json()).then((d) => setBankClients(d.clients || [])),
     ]).then(() => setLoading(false));
   }, [fetchOpinions]);
@@ -232,119 +242,115 @@ export default function BankOpinionPage() {
       bankName: bank?.name || "",
       branchName: bank?.address || "",
     }));
-  };
-
-  // Upload title document and extract property / borrower details
-  const handleDocUpload = async (file: File) => {
-    setUploading(true);
-    setDocExtracted(false);
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      const res = await fetch("/api/bank-opinions/extract-document", { method: "POST", body: fd });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        toast.error(data.error || "Could not extract info from document");
-        return;
-      }
-
-      if (data.warning) {
-        toast.warning(data.warning);
-      }
-
-      const x = data.extracted ?? {};
-
-      // Build property address from granular fields if a combined one isn't present
-      const addrParts = [
-        x.propertyAddress,
-        x.surveyNumber ? `Survey No. ${x.surveyNumber}` : null,
-        x.village,
-        x.taluk ? `${x.taluk} Taluk` : null,
-        x.district ? `${x.district} District` : null,
-        x.totalExtent ? `Extent: ${x.totalExtent}` : null,
-      ].filter(Boolean);
-      const propertyAddr = addrParts.join(", ");
-
-      // Build borrower description
-      const borrower = [
-        x.ownerName,
-        x.fatherHusbandName ? `S/o ${x.fatherHusbandName}` : null,
-        x.ownerAge ? `Age ${x.ownerAge}` : null,
-      ].filter(Boolean).join(", ");
-
-      // Build chain entries from the same document (no extra OCR cost)
-      const rawChainEntries: OwnershipEntry[] = Array.isArray(x.chainEntries)
-        ? x.chainEntries.filter((e: any) => e?.grantor || e?.grantee).map((e: any) => ({
-            fileName: file.name,
-            grantor: String(e.grantor || "Unknown"),
-            grantee: String(e.grantee || "Unknown"),
-            docType: String(e.docType || "Deed"),
-            docNumber: e.docNumber ? String(e.docNumber) : null,
-            year: typeof e.year === "number" ? e.year : null,
-            date: e.date ? String(e.date) : null,
-            sro: e.sro ? String(e.sro) : null,
-            consideration: e.consideration ? String(e.consideration) : null,
-          }))
-        : [];
-
-      const mergedChain = dedupeAndSort(rawChainEntries, []);
-      const chainNarrative = mergedChain.length > 0
-        ? buildChainNarrative(mergedChain)
-        : (x.chainOfTitle || "");
-
-      if (mergedChain.length > 0) setChainEntries(mergedChain);
-
-      setForm((prev) => ({
-        ...prev,
-        borrowerName:      x.ownerName          || prev.borrowerName,
-        loanAmount:        x.loanAmount ? String(x.loanAmount) : prev.loanAmount,
-        propertyAddress:   propertyAddr          || prev.propertyAddress,
-        propertySchedule:  x.propertySchedule   || propertyAddr || prev.propertySchedule,
-        bankName:          x.bankName            || prev.bankName,
-        branchName:        x.branchName          || prev.branchName,
-        documentsExamined: x.documentsExamined   || prev.documentsExamined,
-        chainOfTitle:      chainNarrative        || prev.chainOfTitle,
-        ecPeriodFrom:      x.ecPeriodFrom        || prev.ecPeriodFrom,
-        ecPeriodTo:        x.ecPeriodTo          || prev.ecPeriodTo,
-        legalHeirs:        x.legalHeirs          || prev.legalHeirs,
-        governmentDues:    x.governmentDues      || prev.governmentDues,
-        litigation:        x.litigation          || prev.litigation,
-        encumbrances:      x.encumbrances        || prev.encumbrances,
-        marketability:     x.marketability       || prev.marketability,
-      }));
-
-      setDocExtracted(true);
-      toast.success(`${data.documentType || "Document"} read — fields auto-filled`);
-    } catch {
-      toast.error("Could not extract info from document. Please fill in the details manually.");
-    } finally {
-      setUploading(false);
+    // Try to fetch bank format when a bank is manually selected
+    if (bank?.name && !bankFormatFetchedRef.current) {
+      fetchBankFormat(bank.name);
     }
   };
 
-  // Upload additional documents just for chain tracing
-  const handleChainDocs = async (files: FileList) => {
-    if (files.length === 0) return;
-    setBuildingChain(true);
+  const fetchBankFormat = async (bankName: string) => {
+    if (!bankName || bankFormatFetchedRef.current) return;
+    bankFormatFetchedRef.current = true;
+    setFetchingFormat(true);
     try {
-      const fd = new FormData();
-      for (const f of Array.from(files)) fd.append("files", f);
-      const res = await fetch("/api/bank-opinions/extract-chain", { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || "Could not extract chain"); return; }
-      if (data.errors?.length) toast.warning(`Note: ${data.errors.join("; ")}`);
-      if (!data.entries?.length) { toast.warning("No ownership transfers found in these documents"); return; }
-      const merged = dedupeAndSort(data.entries, chainEntries);
-      setChainEntries(merged);
-      const narrative = buildChainNarrative(merged);
-      setForm((prev) => ({ ...prev, chainOfTitle: narrative }));
-      toast.success(`${merged.length} ownership transfer(s) traced`);
+      const res = await fetch(`/api/bank-opinions/bank-format?bankName=${encodeURIComponent(bankName)}`);
+      const data: BankFormat = await res.json();
+      setBankFormat(data);
+      if (data.found) {
+        toast.success(`Format loaded: ${data.bankFolder} (${data.fileName})`);
+      }
     } catch {
-      toast.error("Could not process documents for chain tracing");
+      // format unavailable — will fall through to template substitution
     } finally {
-      setBuildingChain(false);
+      setFetchingFormat(false);
+    }
+  };
+
+  // Single unified upload handler — handles both field extraction and chain tracing
+  const handleUnifiedUpload = async (files: FileList) => {
+    if (files.length === 0) return;
+    const fileArray = Array.from(files);
+    setUploading(true);
+
+    try {
+      const docFd = new FormData();
+      docFd.append("file", fileArray[0]);
+
+      const chainFd = new FormData();
+      for (const f of fileArray) chainFd.append("files", f);
+
+      const [docResult, chainResult] = await Promise.allSettled([
+        fetch("/api/bank-opinions/extract-document", { method: "POST", body: docFd }).then((r) => r.json()),
+        fetch("/api/bank-opinions/extract-chain", { method: "POST", body: chainFd }).then((r) => r.json()),
+      ]);
+
+      // Process document fields from first file
+      let detectedBank = "";
+      if (docResult.status === "fulfilled") {
+        const docData = docResult.value;
+        if (docData.warning) toast.warning(docData.warning);
+        if (docData.success) {
+          const x = docData.extracted ?? {};
+          const addrParts = [
+            x.propertyAddress,
+            x.surveyNumber ? `Survey No. ${x.surveyNumber}` : null,
+            x.village,
+            x.taluk ? `${x.taluk} Taluk` : null,
+            x.district ? `${x.district} District` : null,
+            x.totalExtent ? `Extent: ${x.totalExtent}` : null,
+          ].filter(Boolean);
+          const propertyAddr = addrParts.join(", ");
+          detectedBank = x.bankName || "";
+
+          setForm((prev) => ({
+            ...prev,
+            borrowerName:      x.ownerName          || prev.borrowerName,
+            loanAmount:        x.loanAmount ? String(x.loanAmount) : prev.loanAmount,
+            propertyAddress:   propertyAddr          || prev.propertyAddress,
+            propertySchedule:  x.propertySchedule   || propertyAddr || prev.propertySchedule,
+            bankName:          x.bankName            || prev.bankName,
+            branchName:        x.branchName          || prev.branchName,
+            documentsExamined: x.documentsExamined   || prev.documentsExamined,
+            chainOfTitle:      x.chainOfTitle        || prev.chainOfTitle,
+            ecPeriodFrom:      x.ecPeriodFrom        || prev.ecPeriodFrom,
+            ecPeriodTo:        x.ecPeriodTo          || prev.ecPeriodTo,
+            legalHeirs:        x.legalHeirs          || prev.legalHeirs,
+            governmentDues:    x.governmentDues      || prev.governmentDues,
+            litigation:        x.litigation          || prev.litigation,
+            encumbrances:      x.encumbrances        || prev.encumbrances,
+            marketability:     x.marketability       || prev.marketability,
+          }));
+
+          toast.success(`${docData.documentType || "Document"} read — fields auto-filled`);
+        } else {
+          toast.error(docData.error || "Could not extract document fields");
+        }
+      }
+
+      // Process ownership chain — overrides chainOfTitle if entries found
+      if (chainResult.status === "fulfilled") {
+        const chainData = chainResult.value;
+        if (chainData.errors?.length) toast.warning(`Note: ${chainData.errors.join("; ")}`);
+        if (chainData.entries?.length) {
+          const merged = dedupeAndSort(chainData.entries, chainEntries);
+          setChainEntries(merged);
+          setForm((prev) => ({ ...prev, chainOfTitle: buildChainNarrative(merged) }));
+        }
+      }
+
+      setDocExtracted(true);
+      setUploadedFiles((prev) => [...prev, ...fileArray.map((f) => f.name)]);
+
+      // Auto-fetch bank format when bank name first detected
+      if (detectedBank && !bankFormatFetchedRef.current) {
+        fetchBankFormat(detectedBank);
+      }
+    } catch {
+      toast.error("Could not process documents. Please fill in the details manually.");
+    } finally {
+      setUploading(false);
+      // Reset input so the same file can be re-uploaded if needed
+      if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
 
@@ -371,34 +377,95 @@ export default function BankOpinionPage() {
       .replace(/\{\{place\}\}/g,             form.place             || "Palakkad");
   };
 
+  const resetForm = () => {
+    setForm({
+      bankClientId: "", bankName: "", branchName: "", borrowerName: "",
+      propertyAddress: "", loanAmount: "", caseId: "", documentsExamined: "",
+      chainOfTitle: "", ecPeriodFrom: "", ecPeriodTo: "", legalHeirs: "",
+      governmentDues: "", litigation: "", encumbrances: "", marketability: "",
+      propertySchedule: "", advocateName: "G. Ananthakrishnan",
+      barCouncilNumber: "KER/123/2001", place: "Palakkad",
+    });
+    setDocExtracted(false);
+    setChainEntries([]);
+    setBankFormat(null);
+    setUploadedFiles([]);
+    bankFormatFetchedRef.current = false;
+  };
+
   const handleCreate = async () => {
-    if (!form.bankName || !form.borrowerName) {
-      toast.error("Bank name and borrower name are required");
+    setGenerating(true);
+    let content: string;
+
+    try {
+      if (bankFormat?.found && bankFormat.text) {
+        // Draft using bank's house-style reference from the archive
+        const loanFormatted = form.loanAmount
+          ? `Rs. ${Number(form.loanAmount).toLocaleString("en-IN")}/-`
+          : undefined;
+        const res = await fetch("/api/bank-opinions/draft", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            formatText: bankFormat.text,
+            bankFolder: bankFormat.bankFolder,
+            variables: {
+              bankName:          form.bankName || undefined,
+              branchName:        form.branchName || undefined,
+              borrowerName:      form.borrowerName || undefined,
+              propertyAddress:   form.propertyAddress || undefined,
+              propertySchedule:  form.propertySchedule || form.propertyAddress || undefined,
+              loanAmount:        loanFormatted,
+              documentsExamined: form.documentsExamined || undefined,
+              ecPeriodFrom:      form.ecPeriodFrom || undefined,
+              ecPeriodTo:        form.ecPeriodTo || undefined,
+              legalHeirs:        form.legalHeirs || undefined,
+              governmentDues:    form.governmentDues || undefined,
+              encumbrances:      form.encumbrances || undefined,
+              advocateName:      form.advocateName,
+              barCouncilNumber:  form.barCouncilNumber,
+              place:             form.place,
+              date:              format(new Date(), "dd/MM/yyyy"),
+            },
+            chainNarrative: form.chainOfTitle,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) throw new Error(data.error || "Draft failed");
+        content = data.content;
+      } else {
+        // Fall back to local template substitution
+        content = getFilledContent();
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Could not generate opinion");
+      setGenerating(false);
       return;
     }
-    const res = await fetch("/api/bank-opinions", {
+
+    const saveRes = await fetch("/api/bank-opinions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        bankName: form.bankName,
-        branchName: form.branchName || undefined,
-        borrowerName: form.borrowerName,
+        bankName:        form.bankName || "[Bank Name]",
+        branchName:      form.branchName || undefined,
+        borrowerName:    form.borrowerName || "[Borrower]",
         propertyAddress: form.propertyAddress || undefined,
-        loanAmount: form.loanAmount || undefined,
-        content: getFilledContent(),
-        caseId: form.caseId || undefined,
-        clientId: form.bankClientId || undefined,
+        loanAmount:      form.loanAmount || undefined,
+        content,
+        caseId:          form.caseId || undefined,
+        clientId:        form.bankClientId || undefined,
       }),
     });
-    if (res.ok) {
+    setGenerating(false);
+
+    if (saveRes.ok) {
       toast.success("Bank opinion created");
       setCreateOpen(false);
-      setForm({ bankClientId: "", bankName: "", branchName: "", borrowerName: "", propertyAddress: "", loanAmount: "", caseId: "", documentsExamined: "", chainOfTitle: "", ecPeriodFrom: "", ecPeriodTo: "", legalHeirs: "", governmentDues: "", litigation: "", encumbrances: "", marketability: "", propertySchedule: "", advocateName: "G. Ananthakrishnan", barCouncilNumber: "KER/123/2001", place: "Palakkad" });
-      setDocExtracted(false);
-      setChainEntries([]);
+      resetForm();
       fetchOpinions();
     } else {
-      toast.error("Failed to create");
+      toast.error("Failed to save opinion");
     }
   };
 
@@ -526,113 +593,117 @@ export default function BankOpinionPage() {
       )}
 
       {/* ── Create Dialog ─────────────────────────────────────────────── */}
-      <Dialog open={createOpen} onOpenChange={(open) => { setCreateOpen(open); if (!open) { setChainEntries([]); setDocExtracted(false); } }}>
+      <Dialog
+        open={createOpen}
+        onOpenChange={(open) => {
+          setCreateOpen(open);
+          if (!open) resetForm();
+        }}
+      >
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>New Bank Opinion</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
 
-            {/* Document Upload */}
-            <div className="rounded-md border-2 border-dashed p-4 space-y-2">
-              <p className="text-sm font-medium">Step 1 — Upload Title Documents (optional)</p>
-              <p className="text-xs text-muted-foreground">
-                Upload title deed, EC certificate, loan agreement etc. — system will auto-extract borrower name and loan amount.
-              </p>
+            {/* Unified Document Upload */}
+            <div className="rounded-md border-2 border-dashed p-4 space-y-3">
+              <div className="flex items-start justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium">Upload Documents</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Title deed, EC, loan agreement, patta — one file or multiple at once.
+                    Upload again to add more. Fields and ownership chain are auto-extracted.
+                  </p>
+                </div>
+                {(fetchingFormat || bankFormat?.found) && (
+                  <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
+                    {fetchingFormat && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                    {bankFormat?.found && (
+                      <Badge variant="outline" className="text-xs whitespace-nowrap">
+                        Format: {bankFormat.bankFolder} ✓
+                      </Badge>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {uploadedFiles.length > 0 && (
+                <div className="space-y-0.5">
+                  {uploadedFiles.map((f, i) => (
+                    <div key={i} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <CheckCircle className="h-3 w-3 text-green-600 shrink-0" />
+                      <span className="truncate">{f}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
               <input
                 ref={fileInputRef}
                 type="file"
                 className="hidden"
                 accept=".pdf,.doc,.docx,.txt"
-                onChange={(e) => e.target.files?.[0] && handleDocUpload(e.target.files[0])}
-              />
-              <div className="flex gap-2 items-center">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={uploading}
-                >
-                  {uploading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}
-                  {uploading ? "Reading document..." : "Upload Document"}
-                </Button>
-                {docExtracted && (
-                  <span className="text-xs text-green-600 flex items-center gap-1">
-                    <CheckCircle className="h-3 w-3" /> Fields auto-filled from document
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* Chain of Title Builder */}
-            <div className="rounded-md border-2 border-dashed p-4 space-y-3">
-              <div>
-                <p className="text-sm font-medium">Trace Chain of Title</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Upload additional deeds, EC, or a bundled PDF — system will trace all ownership transfers across documents.
-                  If the document above already contains everything, the chain is auto-populated.
-                </p>
-              </div>
-              <input
-                ref={chainFileRef}
-                type="file"
-                className="hidden"
-                accept=".pdf,.doc,.docx,.txt"
                 multiple
-                onChange={(e) => e.target.files && handleChainDocs(e.target.files)}
+                onChange={(e) => e.target.files?.length && handleUnifiedUpload(e.target.files)}
               />
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => chainFileRef.current?.click()}
-                disabled={buildingChain}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
               >
-                {buildingChain
+                {uploading
                   ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   : <Upload className="mr-2 h-4 w-4" />}
-                {buildingChain ? "Tracing ownership..." : "Upload Documents for Chain"}
+                {uploading
+                  ? "Reading documents..."
+                  : uploadedFiles.length > 0
+                  ? "Upload More Documents"
+                  : "Upload Document(s)"}
               </Button>
-
-              {chainEntries.length > 0 && (
-                <div className="space-y-2">
-                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                    Ownership Chain — {chainEntries.length} transfer(s) found
-                  </p>
-                  <div className="overflow-x-auto rounded border">
-                    <table className="text-xs w-full border-collapse">
-                      <thead>
-                        <tr className="bg-muted text-left">
-                          <th className="px-2 py-1.5 border-b font-medium">Year</th>
-                          <th className="px-2 py-1.5 border-b font-medium">Previous Owner</th>
-                          <th className="px-2 py-1.5 border-b font-medium w-4"></th>
-                          <th className="px-2 py-1.5 border-b font-medium">New Owner</th>
-                          <th className="px-2 py-1.5 border-b font-medium">Document</th>
-                          <th className="px-2 py-1.5 border-b font-medium">Doc No.</th>
-                          <th className="px-2 py-1.5 border-b font-medium">SRO</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {chainEntries.map((e, i) => (
-                          <tr key={i} className={i % 2 === 0 ? "" : "bg-muted/40"}>
-                            <td className="px-2 py-1.5 border-b font-mono">{e.year ?? "—"}</td>
-                            <td className="px-2 py-1.5 border-b text-muted-foreground">{e.grantor}</td>
-                            <td className="px-2 py-1.5 border-b text-muted-foreground">→</td>
-                            <td className="px-2 py-1.5 border-b font-medium">{e.grantee}</td>
-                            <td className="px-2 py-1.5 border-b">{e.docType}</td>
-                            <td className="px-2 py-1.5 border-b font-mono text-muted-foreground">{e.docNumber ?? "—"}</td>
-                            <td className="px-2 py-1.5 border-b text-muted-foreground">{e.sro ?? "—"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
             </div>
 
-            {/* Bank Selection */}
+            {/* Ownership Chain Table */}
+            {chainEntries.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Ownership Chain — {chainEntries.length} transfer(s) traced
+                </p>
+                <div className="overflow-x-auto rounded border">
+                  <table className="text-xs w-full border-collapse">
+                    <thead>
+                      <tr className="bg-muted text-left">
+                        <th className="px-2 py-1.5 border-b font-medium">Year</th>
+                        <th className="px-2 py-1.5 border-b font-medium">Previous Owner</th>
+                        <th className="px-2 py-1.5 border-b font-medium w-4"></th>
+                        <th className="px-2 py-1.5 border-b font-medium">New Owner</th>
+                        <th className="px-2 py-1.5 border-b font-medium">Document</th>
+                        <th className="px-2 py-1.5 border-b font-medium">Doc No.</th>
+                        <th className="px-2 py-1.5 border-b font-medium">SRO</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {chainEntries.map((e, i) => (
+                        <tr key={i} className={i % 2 === 0 ? "" : "bg-muted/40"}>
+                          <td className="px-2 py-1.5 border-b font-mono">{e.year ?? "—"}</td>
+                          <td className="px-2 py-1.5 border-b text-muted-foreground">{e.grantor}</td>
+                          <td className="px-2 py-1.5 border-b text-muted-foreground">→</td>
+                          <td className="px-2 py-1.5 border-b font-medium">{e.grantee}</td>
+                          <td className="px-2 py-1.5 border-b">{e.docType}</td>
+                          <td className="px-2 py-1.5 border-b font-mono text-muted-foreground">{e.docNumber ?? "—"}</td>
+                          <td className="px-2 py-1.5 border-b text-muted-foreground">{e.sro ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Form Fields */}
             <div className="space-y-3">
-              <p className="text-sm font-medium">Step 2 — Fill in Details</p>
+              <p className="text-sm font-medium">Fill in Details</p>
               <div>
                 <Label>Select Bank (from client list)</Label>
                 <Select value={form.bankClientId} onValueChange={(v: any) => handleBankSelect(String(v || ""))}>
@@ -650,7 +721,7 @@ export default function BankOpinionPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Bank Name *</Label>
+                  <Label>Bank Name</Label>
                   <Input
                     value={form.bankName}
                     onChange={(e) => setForm({ ...form, bankName: e.target.value })}
@@ -666,7 +737,7 @@ export default function BankOpinionPage() {
                   />
                 </div>
                 <div>
-                  <Label>Borrower Name *</Label>
+                  <Label>Borrower Name</Label>
                   <Input
                     value={form.borrowerName}
                     onChange={(e) => setForm({ ...form, borrowerName: e.target.value })}
@@ -696,7 +767,7 @@ export default function BankOpinionPage() {
                   value={form.chainOfTitle}
                   onChange={(e) => setForm({ ...form, chainOfTitle: e.target.value })}
                   rows={4}
-                  placeholder="Ownership history — auto-filled from chain tracing above, or type manually..."
+                  placeholder="Ownership history — auto-filled from uploaded documents, or type manually..."
                   className="text-sm"
                 />
                 {chainEntries.length > 0 && (
@@ -723,8 +794,13 @@ export default function BankOpinionPage() {
               </div>
             </div>
 
-            <Button onClick={handleCreate} className="w-full">
-              Generate Bank Opinion
+            <Button onClick={handleCreate} className="w-full" disabled={generating || uploading}>
+              {generating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {generating
+                ? "Generating opinion..."
+                : bankFormat?.found
+                ? `Generate Opinion (${bankFormat.bankFolder} format)`
+                : "Generate Bank Opinion"}
             </Button>
           </div>
         </DialogContent>
