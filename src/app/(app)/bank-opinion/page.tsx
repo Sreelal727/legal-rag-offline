@@ -90,6 +90,53 @@ Yours faithfully,
 Advocate
 {{barCouncilNumber}}`;
 
+interface OwnershipEntry {
+  fileName?: string;
+  grantor: string;
+  grantee: string;
+  docType: string;
+  docNumber: string | null;
+  year: number | null;
+  date: string | null;
+  sro: string | null;
+  consideration: string | null;
+}
+
+function buildChainNarrative(entries: OwnershipEntry[]): string {
+  if (entries.length === 0) return "";
+  const parts: string[] = [];
+  if (entries[0].grantor && entries[0].grantor !== "Unknown") {
+    parts.push(`The property was originally owned by ${entries[0].grantor}.`);
+  }
+  for (const e of entries) {
+    const docRef = e.docNumber
+      ? `${e.docType} No. ${e.docNumber}${e.year ? `/${e.year}` : ""}`
+      : e.docType;
+    const dateRef = e.date ? ` dated ${e.date}` : e.year ? ` (${e.year})` : "";
+    const sroRef = e.sro ? `, registered before Sub Registrar, ${e.sro}` : "";
+    parts.push(`By ${docRef}${dateRef}${sroRef}, the property was transferred to ${e.grantee}.`);
+  }
+  return parts.join(" ");
+}
+
+function dedupeAndSort(incoming: OwnershipEntry[], existing: OwnershipEntry[]): OwnershipEntry[] {
+  const combined = [...existing, ...incoming];
+  const seen = new Set<string>();
+  return combined
+    .filter((e) => {
+      const key = `${e.grantor.toLowerCase()}|${e.grantee.toLowerCase()}|${e.year ?? ""}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .sort((a, b) => {
+      if (a.year === null && b.year === null) return 0;
+      if (a.year === null) return 1;
+      if (b.year === null) return -1;
+      return a.year - b.year;
+    });
+}
+
 interface BankOpinion {
   id: string;
   bankName: string;
@@ -126,6 +173,11 @@ export default function BankOpinionPage() {
   const [uploading, setUploading] = useState(false);
   const [docExtracted, setDocExtracted] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Chain of title
+  const [chainEntries, setChainEntries] = useState<OwnershipEntry[]>([]);
+  const [buildingChain, setBuildingChain] = useState(false);
+  const chainFileRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({
     bankClientId: "",   // selected from client list
@@ -222,6 +274,28 @@ export default function BankOpinionPage() {
         x.ownerAge ? `Age ${x.ownerAge}` : null,
       ].filter(Boolean).join(", ");
 
+      // Build chain entries from the same document (no extra OCR cost)
+      const rawChainEntries: OwnershipEntry[] = Array.isArray(x.chainEntries)
+        ? x.chainEntries.filter((e: any) => e?.grantor || e?.grantee).map((e: any) => ({
+            fileName: file.name,
+            grantor: String(e.grantor || "Unknown"),
+            grantee: String(e.grantee || "Unknown"),
+            docType: String(e.docType || "Deed"),
+            docNumber: e.docNumber ? String(e.docNumber) : null,
+            year: typeof e.year === "number" ? e.year : null,
+            date: e.date ? String(e.date) : null,
+            sro: e.sro ? String(e.sro) : null,
+            consideration: e.consideration ? String(e.consideration) : null,
+          }))
+        : [];
+
+      const mergedChain = dedupeAndSort(rawChainEntries, []);
+      const chainNarrative = mergedChain.length > 0
+        ? buildChainNarrative(mergedChain)
+        : (x.chainOfTitle || "");
+
+      if (mergedChain.length > 0) setChainEntries(mergedChain);
+
       setForm((prev) => ({
         ...prev,
         borrowerName:      x.ownerName          || prev.borrowerName,
@@ -231,7 +305,7 @@ export default function BankOpinionPage() {
         bankName:          x.bankName            || prev.bankName,
         branchName:        x.branchName          || prev.branchName,
         documentsExamined: x.documentsExamined   || prev.documentsExamined,
-        chainOfTitle:      x.chainOfTitle        || prev.chainOfTitle,
+        chainOfTitle:      chainNarrative        || prev.chainOfTitle,
         ecPeriodFrom:      x.ecPeriodFrom        || prev.ecPeriodFrom,
         ecPeriodTo:        x.ecPeriodTo          || prev.ecPeriodTo,
         legalHeirs:        x.legalHeirs          || prev.legalHeirs,
@@ -247,6 +321,30 @@ export default function BankOpinionPage() {
       toast.error("Could not extract info from document. Please fill in the details manually.");
     } finally {
       setUploading(false);
+    }
+  };
+
+  // Upload additional documents just for chain tracing
+  const handleChainDocs = async (files: FileList) => {
+    if (files.length === 0) return;
+    setBuildingChain(true);
+    try {
+      const fd = new FormData();
+      for (const f of Array.from(files)) fd.append("files", f);
+      const res = await fetch("/api/bank-opinions/extract-chain", { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) { toast.error(data.error || "Could not extract chain"); return; }
+      if (data.errors?.length) toast.warning(`Note: ${data.errors.join("; ")}`);
+      if (!data.entries?.length) { toast.warning("No ownership transfers found in these documents"); return; }
+      const merged = dedupeAndSort(data.entries, chainEntries);
+      setChainEntries(merged);
+      const narrative = buildChainNarrative(merged);
+      setForm((prev) => ({ ...prev, chainOfTitle: narrative }));
+      toast.success(`${merged.length} ownership transfer(s) traced`);
+    } catch {
+      toast.error("Could not process documents for chain tracing");
+    } finally {
+      setBuildingChain(false);
     }
   };
 
@@ -297,6 +395,7 @@ export default function BankOpinionPage() {
       setCreateOpen(false);
       setForm({ bankClientId: "", bankName: "", branchName: "", borrowerName: "", propertyAddress: "", loanAmount: "", caseId: "", documentsExamined: "", chainOfTitle: "", ecPeriodFrom: "", ecPeriodTo: "", legalHeirs: "", governmentDues: "", litigation: "", encumbrances: "", marketability: "", propertySchedule: "", advocateName: "G. Ananthakrishnan", barCouncilNumber: "KER/123/2001", place: "Palakkad" });
       setDocExtracted(false);
+      setChainEntries([]);
       fetchOpinions();
     } else {
       toast.error("Failed to create");
@@ -427,7 +526,7 @@ export default function BankOpinionPage() {
       )}
 
       {/* ── Create Dialog ─────────────────────────────────────────────── */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+      <Dialog open={createOpen} onOpenChange={(open) => { setCreateOpen(open); if (!open) { setChainEntries([]); setDocExtracted(false); } }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>New Bank Opinion</DialogTitle>
@@ -463,6 +562,72 @@ export default function BankOpinionPage() {
                   </span>
                 )}
               </div>
+            </div>
+
+            {/* Chain of Title Builder */}
+            <div className="rounded-md border-2 border-dashed p-4 space-y-3">
+              <div>
+                <p className="text-sm font-medium">Trace Chain of Title</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Upload additional deeds, EC, or a bundled PDF — system will trace all ownership transfers across documents.
+                  If the document above already contains everything, the chain is auto-populated.
+                </p>
+              </div>
+              <input
+                ref={chainFileRef}
+                type="file"
+                className="hidden"
+                accept=".pdf,.doc,.docx,.txt"
+                multiple
+                onChange={(e) => e.target.files && handleChainDocs(e.target.files)}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => chainFileRef.current?.click()}
+                disabled={buildingChain}
+              >
+                {buildingChain
+                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  : <Upload className="mr-2 h-4 w-4" />}
+                {buildingChain ? "Tracing ownership..." : "Upload Documents for Chain"}
+              </Button>
+
+              {chainEntries.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Ownership Chain — {chainEntries.length} transfer(s) found
+                  </p>
+                  <div className="overflow-x-auto rounded border">
+                    <table className="text-xs w-full border-collapse">
+                      <thead>
+                        <tr className="bg-muted text-left">
+                          <th className="px-2 py-1.5 border-b font-medium">Year</th>
+                          <th className="px-2 py-1.5 border-b font-medium">Previous Owner</th>
+                          <th className="px-2 py-1.5 border-b font-medium w-4"></th>
+                          <th className="px-2 py-1.5 border-b font-medium">New Owner</th>
+                          <th className="px-2 py-1.5 border-b font-medium">Document</th>
+                          <th className="px-2 py-1.5 border-b font-medium">Doc No.</th>
+                          <th className="px-2 py-1.5 border-b font-medium">SRO</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {chainEntries.map((e, i) => (
+                          <tr key={i} className={i % 2 === 0 ? "" : "bg-muted/40"}>
+                            <td className="px-2 py-1.5 border-b font-mono">{e.year ?? "—"}</td>
+                            <td className="px-2 py-1.5 border-b text-muted-foreground">{e.grantor}</td>
+                            <td className="px-2 py-1.5 border-b text-muted-foreground">→</td>
+                            <td className="px-2 py-1.5 border-b font-medium">{e.grantee}</td>
+                            <td className="px-2 py-1.5 border-b">{e.docType}</td>
+                            <td className="px-2 py-1.5 border-b font-mono text-muted-foreground">{e.docNumber ?? "—"}</td>
+                            <td className="px-2 py-1.5 border-b text-muted-foreground">{e.sro ?? "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Bank Selection */}
@@ -524,6 +689,25 @@ export default function BankOpinionPage() {
                   rows={3}
                   placeholder="Survey No., Village, Taluk, District..."
                 />
+              </div>
+              <div>
+                <Label>Chain of Title</Label>
+                <Textarea
+                  value={form.chainOfTitle}
+                  onChange={(e) => setForm({ ...form, chainOfTitle: e.target.value })}
+                  rows={4}
+                  placeholder="Ownership history — auto-filled from chain tracing above, or type manually..."
+                  className="text-sm"
+                />
+                {chainEntries.length > 0 && (
+                  <button
+                    type="button"
+                    className="text-xs text-primary underline mt-1"
+                    onClick={() => setForm((prev) => ({ ...prev, chainOfTitle: buildChainNarrative(chainEntries) }))}
+                  >
+                    Regenerate from chain table
+                  </button>
+                )}
               </div>
               <div>
                 <Label>Link to Case (optional)</Label>
