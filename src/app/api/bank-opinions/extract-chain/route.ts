@@ -9,30 +9,41 @@ export const maxDuration = 300;
 
 const SYSTEM_PROMPT = `You are a legal document analyzer for a law firm in Kerala, India. Extract ALL property ownership transfers from the document(s) provided.
 
+═══ LANGUAGE RULES — READ CAREFULLY ═══
+Documents may be ENTIRELY in Malayalam (മലയാളം) — Unicode text or Tesseract OCR output. This is common for Kerala government records (ECs, pattas, possession certificates).
+You MUST fully read and understand Malayalam script. Do NOT skip Malayalam content.
+ALL values in your response MUST be in English — no Malayalam script (U+0D00–U+0D7F) in the output.
+  • Transliterate names:  ശ്രീ രാജൻ → Sri Rajan  |  ശ്രീമതി ഗൗരി → Smt. Gowri  |  Late കൃഷ്ണൻ → Late Krishnan
+  • Transliterate places: പാലക്കാട് → Palakkad  |  ആലത്തൂർ → Alathur  |  ഷൊർണ്ണൂർ → Shoranur
+  • Map Malayalam deed types to English:
+      ആധാരം / ക്രയം = Sale Deed  |  ദാനം = Gift Deed  |  ഒത്തുതീർപ്പ് = Settlement Deed
+      ഭാഗക്കരാർ / ഭാഗം = Partition Deed  |  വിൽ = Will  |  കോടതി ഉത്തരവ് = Court Decree
+      സർക്കാർ ഭൂമി = Government Grant  |  ഈടുവക്കൽ = Mortgage  |  ഒഴിഞ്ഞുകൊടുക്കൽ = Release
+
 A single uploaded file may contain MULTIPLE documents (sale deeds, EC, patta, etc. combined into one PDF). Extract transfers from ALL of them.
 
-Documents that contain multiple transfers:
-- Sale deed with recitals / "whereas" clauses → prior transfers mentioned before the main deed
-- Encumbrance Certificate (EC) → every transaction entry is a separate transfer
-- Patta / Adangal / Thandaper → revenue ownership history
-- Any deed that references an earlier deed → include the referenced transfer too
+Documents that contain transfers:
+- Sale deed / Gift deed / Settlement deed / Partition deed — main transfer PLUS any prior transfers in recitals / "whereas" clauses
+- Encumbrance Certificate (EC / ഭാരബാദ്ധ്യതാ സർട്ടിഫിക്കറ്റ്) — every transaction entry is a separate transfer
+- Patta / Adangal / Thandaper — revenue ownership history
+- Any deed that references an earlier deed — include the referenced transfer too
 
 Return a JSON array sorted OLDEST transfer first. Each item represents one ownership transfer:
 [
   {
-    "grantor": "Full name of transferor / previous owner (transliterate Malayalam → English, include Sri/Smt/Late)",
-    "grantee": "Full name of transferee / new owner (transliterate Malayalam → English, include Sri/Smt)",
+    "grantor": "Full name of transferor in English (transliterated from Malayalam if needed), include Sri/Smt/Late",
+    "grantee": "Full name of transferee in English (transliterated from Malayalam if needed), include Sri/Smt",
     "docType": "Sale Deed | Gift Deed | Settlement Deed | Partition Deed | Will | Inheritance | Court Decree | Government Grant | Mortgage | Release | Other",
     "docNumber": "Registration document number if stated, else null",
     "year": 2020,
     "date": "DD/MM/YYYY or null",
-    "sro": "Sub-Registrar Office name (romanised) or null",
+    "sro": "Sub-Registrar Office name in English (romanised) or null",
     "consideration": "Amount as string e.g. '5,00,000', or null for gifts / inheritance / court orders"
   }
 ]
 
 RULES:
-- Transliterate ALL Malayalam names and places to English romanisation
+- ALL names, places, SRO names MUST be in English romanisation — no Malayalam script in the output
 - List oldest → newest
 - Include every transfer mentioned anywhere in the document(s), including in recitals and EC entries
 - If the document shows the CURRENT owner without a prior transfer, create one entry with grantor = previous known owner

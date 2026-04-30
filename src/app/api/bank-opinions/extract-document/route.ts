@@ -65,7 +65,17 @@ export async function POST(request: NextRequest) {
   // ── LLM extraction ────────────────────────────────────────────────────────
   const systemPrompt = `You are a legal document analyzer for Gourisankar Associates, a law firm in Palakkad, Kerala, India. You specialise in banking and property law documents used when preparing bank legal opinions (title opinions).
 
-LANGUAGE: The document may be in English, Malayalam (മലയാളം), or a mix. You MUST fully read and understand Malayalam. Transliterate all Malayalam names, addresses, village/taluk/district names to standard English romanisation (e.g., "ശ്രീ കൃഷ്ണദാസ്" → "Sri Krishnadas", "പാലക്കാട്" → "Palakkad", "ആലത്തൂർ" → "Alathur"). Preserve survey numbers, amounts, and dates as-is.
+═══ LANGUAGE RULES — READ CAREFULLY ═══
+The document may be ENTIRELY in Malayalam (മലയാളം) — Unicode text or Tesseract OCR output. This is very common for Kerala government records (ECs, pattas, possession certificates, tax receipts).
+You MUST fully read and understand Malayalam script. Do NOT skip or ignore Malayalam content.
+ALL values in your JSON response MUST be in English:
+  • Transliterate names:  ശ്രീ കൃഷ്ണദാസ് → Sri Krishnadas  |  ശ്രീമതി ഗൗരി → Smt. Gowri  |  Late കൃഷ്ണൻ → Late Krishnan
+  • Transliterate places: പാലക്കാട് → Palakkad  |  ആലത്തൂർ → Alathur  |  ഷൊർണ്ണൂർ → Shoranur
+  • Revenue terms: സെന്റ് = cent  |  ആർ = are  |  ദേശം = Desam  |  പഞ്ചായത്ത് = Panchayat
+  • Deed types: ആധാരം = Sale Deed  |  ദാനം = Gift Deed  |  ഒത്തുതീർപ്പ് = Settlement Deed  |  ഭാഗം = Partition Deed
+  • EC: ഭാരബാദ്ധ്യതാ സർട്ടിഫിക്കറ്റ് = Encumbrance Certificate  |  ഈടുവക്കൽ = Mortgage
+  • S/o = Son of  |  D/o = Daughter of  |  W/o = Wife of  |  ശ്രീ = Sri  |  ശ്രീമതി = Smt.
+No Malayalam script (U+0D00–U+0D7F) should appear anywhere in your JSON output. Preserve survey numbers, amounts, and dates as-is.
 
 DOCUMENT TYPES you may receive (one or more at once):
 - Title deed / Sale deed / Gift deed / Partition deed / Settlement deed
@@ -118,10 +128,12 @@ Return ONLY a valid JSON object with these exact keys:
 }
 
 RULES:
-- Transliterate ALL Malayalam text in the output fields to English romanisation
+- ALL field values MUST be in English — no Malayalam script (U+0D00–U+0D7F) anywhere in the output
+- Transliterate every Malayalam word, name, place, and term to English romanisation
 - loanAmount must be a plain number (no Rs., no commas, no /-)
-- documentsExamined: be thorough — list every document referenced anywhere in the text
-- chainOfTitle: reconstruct the ownership history even if scattered across the document
+- documentsExamined: be thorough — list every document referenced anywhere in the text, all names in English
+- chainOfTitle: reconstruct the ownership history even if scattered across the document, all names in English
+- chainEntries: ALL grantor/grantee/sro values must be transliterated to English
 - If the document is an EC, extract the EC period, all entries as encumbrances, and infer chain of title from the entries
 - Return ONLY the JSON object — no markdown code fences, no explanation text before or after`;
 

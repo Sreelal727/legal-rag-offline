@@ -41,15 +41,20 @@ export async function POST(request: NextRequest) {
 
 You will be given:
 1. A REFERENCE OPINION — a real past opinion the firm issued to ${bankFolder || "this bank"}. Treat its structure, headings, paragraph order, salutation, signature block, and tone as the authoritative format for this bank.
-2. CURRENT CASE VARIABLES — facts about the new case (borrower, property, loan, etc.) that you must use.
+2. CURRENT CASE VARIABLES — facts about the new case (borrower, property, loan, etc.) auto-extracted from Malayalam/English documents.
 3. CHAIN OF TITLE — chronological ownership history that must appear in the title chain section.
+
+LANGUAGE — CRITICAL:
+- The OUTPUT MUST BE ENTIRELY IN ENGLISH. This is a formal legal opinion letter written in English.
+- The input variables were extracted from documents that may have been in Malayalam. Some variables may still contain Malayalam script (Unicode block U+0D00–U+0D7F). Before using any variable value, transliterate it to English romanisation:
+    ശ്രീ കൃഷ്ണദാസ് → Sri Krishnadas  |  പാലക്കാട് → Palakkad  |  ആലത്തൂർ → Alathur
+- Kerala revenue terms to use in English form: Sy.No. (Survey Number), cents (area), taluk, village, Patta No., EC period, SRO (Sub Registrar Office)
 
 DRAFTING RULES:
 - Reproduce the reference opinion's STRUCTURE exactly: same headings, same section order, same letterhead style, same salutation, same closing/signature pattern.
 - Replace all case-specific details from the reference (borrower names, property details, dates, loan amounts, survey numbers, deed numbers) with the CURRENT CASE VARIABLES. Do NOT carry over the reference case's facts.
 - If a variable is missing, use a clearly-marked placeholder like "[insert ___]" rather than inventing details.
 - Use Indian legal terminology and Kerala revenue terminology appropriately (Sub Registrar, Taluk, Sy.No., cents, etc.).
-- Transliterate any Malayalam to English romanisation in the output.
 - The CHAIN OF TITLE narrative must appear verbatim (or lightly adapted) in the title-chain / devolution section of the opinion.
 - Output the COMPLETED OPINION ONLY — no preamble, no explanation, no markdown code fences. Plain text suitable for printing on the firm's letterhead.`;
 
