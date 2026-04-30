@@ -266,80 +266,77 @@ export default function BankOpinionPage() {
     }
   };
 
-  // Single unified upload handler — handles both field extraction and chain tracing
+  // Unified upload handler — extracts fields AND chain from ALL uploaded files
+  // in a single API round-trip (two parallel LLM calls server-side).
   const handleUnifiedUpload = async (files: FileList) => {
     if (files.length === 0) return;
     const fileArray = Array.from(files);
     setUploading(true);
 
     try {
-      const docFd = new FormData();
-      docFd.append("file", fileArray[0]);
+      const fd = new FormData();
+      for (const f of fileArray) fd.append("files", f);
 
-      const chainFd = new FormData();
-      for (const f of fileArray) chainFd.append("files", f);
+      const res = await fetch("/api/bank-opinions/extract-all", { method: "POST", body: fd });
+      const data = await res.json();
 
-      const [docResult, chainResult] = await Promise.allSettled([
-        fetch("/api/bank-opinions/extract-document", { method: "POST", body: docFd }).then((r) => r.json()),
-        fetch("/api/bank-opinions/extract-chain", { method: "POST", body: chainFd }).then((r) => r.json()),
-      ]);
-
-      // Process document fields from first file
-      let detectedBank = "";
-      if (docResult.status === "fulfilled") {
-        const docData = docResult.value;
-        if (docData.warning) toast.warning(docData.warning);
-        if (docData.success) {
-          const x = docData.extracted ?? {};
-          const addrParts = [
-            x.propertyAddress,
-            x.surveyNumber ? `Survey No. ${x.surveyNumber}` : null,
-            x.village,
-            x.taluk ? `${x.taluk} Taluk` : null,
-            x.district ? `${x.district} District` : null,
-            x.totalExtent ? `Extent: ${x.totalExtent}` : null,
-          ].filter(Boolean);
-          const propertyAddr = addrParts.join(", ");
-          detectedBank = x.bankName || "";
-
-          setForm((prev) => ({
-            ...prev,
-            borrowerName:      x.ownerName          || prev.borrowerName,
-            loanAmount:        x.loanAmount ? String(x.loanAmount) : prev.loanAmount,
-            propertyAddress:   propertyAddr          || prev.propertyAddress,
-            propertySchedule:  x.propertySchedule   || propertyAddr || prev.propertySchedule,
-            bankName:          x.bankName            || prev.bankName,
-            branchName:        x.branchName          || prev.branchName,
-            documentsExamined: x.documentsExamined   || prev.documentsExamined,
-            chainOfTitle:      x.chainOfTitle        || prev.chainOfTitle,
-            ecPeriodFrom:      x.ecPeriodFrom        || prev.ecPeriodFrom,
-            ecPeriodTo:        x.ecPeriodTo          || prev.ecPeriodTo,
-            legalHeirs:        x.legalHeirs          || prev.legalHeirs,
-            governmentDues:    x.governmentDues      || prev.governmentDues,
-            litigation:        x.litigation          || prev.litigation,
-            encumbrances:      x.encumbrances        || prev.encumbrances,
-            marketability:     x.marketability       || prev.marketability,
-          }));
-
-          toast.success(`${docData.documentType || "Document"} read — fields auto-filled`);
-        } else {
-          toast.error(docData.error || "Could not extract document fields");
-        }
+      if (!res.ok) {
+        toast.error(data.error || "Could not process documents");
+        return;
       }
 
-      // Process ownership chain — overrides chainOfTitle if entries found
-      if (chainResult.status === "fulfilled") {
-        const chainData = chainResult.value;
-        if (chainData.errors?.length) toast.warning(`Note: ${chainData.errors.join("; ")}`);
-        if (chainData.entries?.length) {
-          const merged = dedupeAndSort(chainData.entries, chainEntries);
-          setChainEntries(merged);
-          setForm((prev) => ({ ...prev, chainOfTitle: buildChainNarrative(merged) }));
-        }
+      if (data.errors?.length) {
+        toast.warning(`Some files skipped: ${data.errors.join("; ")}`);
+      }
+
+      // ── Apply extracted fields (first non-empty value wins vs existing state) ──
+      const x = data.extracted ?? {};
+      const addrParts = [
+        x.propertyAddress,
+        x.surveyNumber ? `Survey No. ${x.surveyNumber}` : null,
+        x.village,
+        x.taluk ? `${x.taluk} Taluk` : null,
+        x.district ? `${x.district} District` : null,
+        x.totalExtent ? `Extent: ${x.totalExtent}` : null,
+      ].filter(Boolean);
+      const propertyAddr = addrParts.join(", ");
+      const detectedBank = x.bankName || "";
+
+      setForm((prev) => ({
+        ...prev,
+        borrowerName:      x.ownerName          || prev.borrowerName,
+        loanAmount:        x.loanAmount ? String(x.loanAmount) : prev.loanAmount,
+        propertyAddress:   propertyAddr          || prev.propertyAddress,
+        propertySchedule:  x.propertySchedule   || propertyAddr || prev.propertySchedule,
+        bankName:          x.bankName            || prev.bankName,
+        branchName:        x.branchName          || prev.branchName,
+        // Accumulate documentsExamined across batches
+        documentsExamined: prev.documentsExamined && x.documentsExamined
+          ? `${prev.documentsExamined}\n${x.documentsExamined}`
+          : x.documentsExamined || prev.documentsExamined,
+        ecPeriodFrom:      x.ecPeriodFrom        || prev.ecPeriodFrom,
+        ecPeriodTo:        x.ecPeriodTo          || prev.ecPeriodTo,
+        legalHeirs:        x.legalHeirs          || prev.legalHeirs,
+        governmentDues:    x.governmentDues      || prev.governmentDues,
+        litigation:        x.litigation          || prev.litigation,
+        encumbrances:      x.encumbrances        || prev.encumbrances,
+        marketability:     x.marketability       || prev.marketability,
+      }));
+
+      // ── Merge chain entries from this batch with previously traced entries ──
+      if (data.chainEntries?.length) {
+        const merged = dedupeAndSort(data.chainEntries, chainEntries);
+        setChainEntries(merged);
+        setForm((prev) => ({ ...prev, chainOfTitle: buildChainNarrative(merged) }));
+      } else if (x.chainOfTitle) {
+        setForm((prev) => ({ ...prev, chainOfTitle: x.chainOfTitle || prev.chainOfTitle }));
       }
 
       setDocExtracted(true);
       setUploadedFiles((prev) => [...prev, ...fileArray.map((f) => f.name)]);
+
+      const label = data.documentTypes || (data.fileCount > 1 ? `${data.fileCount} documents` : "Document");
+      toast.success(`${label} read — fields and chain updated`);
 
       // Auto-fetch bank format when bank name first detected
       if (detectedBank && !bankFormatFetchedRef.current) {
@@ -349,7 +346,6 @@ export default function BankOpinionPage() {
       toast.error("Could not process documents. Please fill in the details manually.");
     } finally {
       setUploading(false);
-      // Reset input so the same file can be re-uploaded if needed
       if (fileInputRef.current) fileInputRef.current.value = "";
     }
   };
