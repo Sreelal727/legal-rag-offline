@@ -258,11 +258,23 @@ export default function BankOpinionPage() {
       setBankFormat(data);
       if (data.found) {
         toast.success(`Format loaded: ${data.bankFolder} (${data.fileName})`);
+      } else {
+        toast.info(`No saved format for "${bankName}" — will use default template`);
       }
     } catch {
       // format unavailable — will fall through to template substitution
     } finally {
       setFetchingFormat(false);
+    }
+  };
+
+  // Called when the user manually changes the bank name field in the upload area
+  const handleBankNameChange = (name: string) => {
+    setForm((prev) => ({ ...prev, bankName: name }));
+    // Reset format so a new fetch is triggered on blur
+    if (bankFormat !== null || bankFormatFetchedRef.current) {
+      setBankFormat(null);
+      bankFormatFetchedRef.current = false;
     }
   };
 
@@ -612,15 +624,45 @@ export default function BankOpinionPage() {
                     Upload again to add more. Fields and ownership chain are auto-extracted.
                   </p>
                 </div>
-                {(fetchingFormat || bankFormat?.found) && (
+                {(fetchingFormat || bankFormat !== null) && (
                   <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
                     {fetchingFormat && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
-                    {bankFormat?.found && (
-                      <Badge variant="outline" className="text-xs whitespace-nowrap">
+                    {!fetchingFormat && bankFormat?.found && (
+                      <Badge variant="outline" className="text-xs whitespace-nowrap text-green-700 border-green-400">
                         Format: {bankFormat.bankFolder} ✓
                       </Badge>
                     )}
+                    {!fetchingFormat && bankFormat && !bankFormat.found && (
+                      <Badge variant="outline" className="text-xs whitespace-nowrap text-muted-foreground">
+                        No saved format
+                      </Badge>
+                    )}
                   </div>
+                )}
+              </div>
+
+              {/* Bank name — asked upfront so format can be loaded before document upload */}
+              <div className="flex items-center gap-2">
+                <div className="flex-1">
+                  <Label className="text-xs text-muted-foreground mb-1 block">Bank Name</Label>
+                  <Input
+                    value={form.bankName}
+                    onChange={(e) => handleBankNameChange(e.target.value)}
+                    onBlur={() => form.bankName.trim() && fetchBankFormat(form.bankName.trim())}
+                    placeholder="e.g. State Bank of India, PNB, HDFC…"
+                    className="h-8 text-sm"
+                  />
+                </div>
+                {form.bankName.trim() && !bankFormatFetchedRef.current && !fetchingFormat && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-5 h-8 text-xs"
+                    onClick={() => fetchBankFormat(form.bankName.trim())}
+                  >
+                    Load Format
+                  </Button>
                 )}
               </div>
 
