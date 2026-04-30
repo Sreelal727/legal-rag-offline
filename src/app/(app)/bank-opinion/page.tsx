@@ -624,47 +624,7 @@ export default function BankOpinionPage() {
                     Upload again to add more. Fields and ownership chain are auto-extracted.
                   </p>
                 </div>
-                {(fetchingFormat || bankFormat !== null) && (
-                  <div className="flex items-center gap-1.5 shrink-0 mt-0.5">
-                    {fetchingFormat && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
-                    {!fetchingFormat && bankFormat?.found && (
-                      <Badge variant="outline" className="text-xs whitespace-nowrap text-green-700 border-green-400">
-                        Format: {bankFormat.bankFolder} ✓
-                      </Badge>
-                    )}
-                    {!fetchingFormat && bankFormat && !bankFormat.found && (
-                      <Badge variant="outline" className="text-xs whitespace-nowrap text-muted-foreground">
-                        No saved format
-                      </Badge>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Bank name — asked upfront so format can be loaded before document upload */}
-              <div className="flex items-center gap-2">
-                <div className="flex-1">
-                  <Label className="text-xs text-muted-foreground mb-1 block">Bank Name</Label>
-                  <Input
-                    value={form.bankName}
-                    onChange={(e) => handleBankNameChange(e.target.value)}
-                    onBlur={() => form.bankName.trim() && fetchBankFormat(form.bankName.trim())}
-                    placeholder="e.g. State Bank of India, PNB, HDFC…"
-                    className="h-8 text-sm"
-                  />
                 </div>
-                {form.bankName.trim() && !bankFormatFetchedRef.current && !fetchingFormat && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="mt-5 h-8 text-xs"
-                    onClick={() => fetchBankFormat(form.bankName.trim())}
-                  >
-                    Load Format
-                  </Button>
-                )}
-              </div>
 
               {uploadedFiles.length > 0 && (
                 <div className="space-y-0.5">
@@ -759,10 +719,24 @@ export default function BankOpinionPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <Label>Bank Name</Label>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Label>Bank Name</Label>
+                    {fetchingFormat && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                    {!fetchingFormat && bankFormat?.found && (
+                      <Badge variant="outline" className="text-xs text-green-700 border-green-400">
+                        {bankFormat.bankFolder} format ✓
+                      </Badge>
+                    )}
+                    {!fetchingFormat && bankFormat && !bankFormat.found && (
+                      <Badge variant="outline" className="text-xs text-muted-foreground">
+                        no saved format
+                      </Badge>
+                    )}
+                  </div>
                   <Input
                     value={form.bankName}
-                    onChange={(e) => setForm({ ...form, bankName: e.target.value })}
+                    onChange={(e) => handleBankNameChange(e.target.value)}
+                    onBlur={() => form.bankName.trim() && fetchBankFormat(form.bankName.trim())}
                     placeholder="State Bank of India"
                   />
                 </div>
