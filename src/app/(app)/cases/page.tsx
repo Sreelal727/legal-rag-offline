@@ -264,7 +264,13 @@ export default function CasesPage() {
                 <div className="space-y-2">
                   <Label>Select Client</Label>
                   <Select value={selectedClientId} onValueChange={handleClientSelect}>
-                    <SelectTrigger><SelectValue placeholder="Choose existing or new..." /></SelectTrigger>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose existing or new...">
+                        {selectedClientId === "new"
+                          ? "+ New Client"
+                          : (() => { const c = existingClients.find((x: any) => x.id === selectedClientId); return c ? `${c.name}${c.phone ? ` (${c.phone})` : ""}` : undefined; })() || undefined}
+                      </SelectValue>
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="new">+ New Client</SelectItem>
                       {existingClients.map((c) => (

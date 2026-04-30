@@ -18,6 +18,7 @@ import {
   Plus, Clock, Receipt, IndianRupee, Trash2, FileText, Loader2, Download,
 } from "lucide-react";
 import { downloadInvoicePDF } from "@/lib/invoice-pdf";
+import { clientLabel, selectedClientLabel } from "@/lib/client-label";
 import { toast } from "sonner";
 import { RoleGate } from "@/components/role-gate";
 import { format } from "date-fns";
@@ -247,7 +248,7 @@ export default function BillingPage() {
                         <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
                         <SelectContent>
                           {clients.map((c: any) => (
-                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                            <SelectItem key={c.id} value={c.id}>{clientLabel(c, clients)}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -272,12 +273,12 @@ export default function BillingPage() {
                       <Select value={invoiceClientId} onValueChange={(v) => { setInvoiceClientId(v ?? ""); setInvoiceCaseId(""); }}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select client">
-                            {invoiceClientId ? clients.find((c: any) => c.id === invoiceClientId)?.name : "Select client"}
+                            {selectedClientLabel(invoiceClientId, clients) || undefined}
                           </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           {clients.map((c: any) => (
-                            <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                            <SelectItem key={c.id} value={c.id}>{clientLabel(c, clients)}</SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
@@ -810,8 +811,12 @@ function FeeAgreementsTab({ cases, clients }: { cases: any[]; clients: any[] }) 
             <div>
               <Label>Client *</Label>
               <Select value={form.clientId} onValueChange={(v: any) => setForm({ ...form, clientId: String(v || "") })}>
-                <SelectTrigger><SelectValue placeholder="Select client" /></SelectTrigger>
-                <SelectContent>{clients.map((c) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select client">
+                    {selectedClientLabel(form.clientId, clients) || undefined}
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>{clients.map((c) => <SelectItem key={c.id} value={c.id}>{clientLabel(c, clients)}</SelectItem>)}</SelectContent>
               </Select>
             </div>
             <div>

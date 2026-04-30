@@ -19,6 +19,7 @@ import {
 import { toast } from "sonner";
 import { RoleGate } from "@/components/role-gate";
 import { format } from "date-fns";
+import { clientLabel, selectedClientLabel } from "@/lib/client-label";
 
 const STATUS_COLORS: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
   DRAFT: "secondary",
@@ -706,11 +707,15 @@ export default function BankOpinionPage() {
                 <Label>Select Bank (from client list)</Label>
                 <Select value={form.bankClientId} onValueChange={(v: any) => handleBankSelect(String(v || ""))}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Choose a bank client..." />
+                    <SelectValue placeholder="Choose a bank client...">
+                      {selectedClientLabel(form.bankClientId, bankClients) || undefined}
+                    </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
                     {bankClients.map((c) => (
-                      <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                      <SelectItem key={c.id} value={c.id}>
+                        {clientLabel(c, bankClients)}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

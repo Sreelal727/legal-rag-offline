@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import { RoleGate } from "@/components/role-gate";
 import { format, differenceInDays } from "date-fns";
 import { LIMITATION_PERIODS, LIMITATION_CATEGORIES, type LimitationPeriod } from "@/lib/indian-law/limitation-periods";
+import { clientLabel, selectedClientLabel } from "@/lib/client-label";
 
 interface Tracker {
   id: string;
@@ -295,10 +296,14 @@ export default function LimitationPage() {
                   <div className="space-y-2">
                     <Label>Link to Client</Label>
                     <Select value={formClientId} onValueChange={(v: any) => setFormClientId(String(v))}>
-                      <SelectTrigger><SelectValue placeholder="None" /></SelectTrigger>
+                      <SelectTrigger>
+                        <SelectValue placeholder="None">
+                          {selectedClientLabel(formClientId, clients) || undefined}
+                        </SelectValue>
+                      </SelectTrigger>
                       <SelectContent>
                         {clients.map((c: any) => (
-                          <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                          <SelectItem key={c.id} value={c.id}>{clientLabel(c, clients)}</SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
