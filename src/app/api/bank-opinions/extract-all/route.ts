@@ -199,13 +199,23 @@ export async function POST(request: NextRequest) {
   }
 
   // ── Step 2: Combine all texts with clear document markers ─────────────────
-  // Budget: 24 000 chars total, split equally among files (min 4 000 each)
-  const charBudget = Math.max(4000, Math.floor(24000 / fileTexts.length));
+  // Give each file up to 18 000 chars so even a single large document is well
+  // covered; cap the per-file slice at 18 000 and the overall corpus at 36 000
+  // to keep context manageable for local models (Ollama/LM Studio).
+  const PER_FILE_MAX = 18000;
+  const TOTAL_MAX    = 36000;
+  const perFileBudget = Math.max(
+    4000,
+    Math.min(PER_FILE_MAX, Math.floor(TOTAL_MAX / fileTexts.length))
+  );
   const combinedText = fileTexts
-    .map((f, i) => `=== DOCUMENT ${i + 1}: ${f.fileName} ===\n${f.text.substring(0, charBudget)}`)
-    .join("\n\n");
+    .map((f, i) => `=== DOCUMENT ${i + 1}: ${f.fileName} ===\n${f.text.substring(0, perFileBudget)}`)
+    .join("\n\n")
+    .substring(0, TOTAL_MAX);               // hard cap on total input
 
   // ── Step 3: Two LLM calls in parallel ─────────────────────────────────────
+  // Do NOT override maxTokens — the extraction JSON needs ≥ 3 000 tokens to be
+  // complete.  Use the configured default (LLM_MAX_TOKENS env var, else 4 096).
   const [fieldResult, chainResult] = await Promise.allSettled([
     chatCompletion(
       [
@@ -214,8 +224,7 @@ export async function POST(request: NextRequest) {
           role: "user",
           content: `Extract all fields from these ${fileTexts.length} document(s). Synthesise information across all of them:\n\n${combinedText}`,
         },
-      ],
-      { maxTokens: 2048 }
+      ]
     ) as Promise<string>,
 
     chatCompletion(
@@ -225,27 +234,40 @@ export async function POST(request: NextRequest) {
           role: "user",
           content: `Extract all ownership transfers from these ${fileTexts.length} document(s). Piece together the complete chain across all files:\n\n${combinedText}`,
         },
-      ],
-      { maxTokens: 2048 }
+      ]
     ) as Promise<string>,
   ]);
 
   // ── Step 4: Parse field extraction result ─────────────────────────────────
   let extracted: Record<string, any> = {};
-  if (fieldResult.status === "fulfilled") {
+  let fieldWarning: string | undefined;
+
+  if (fieldResult.status === "rejected") {
+    fieldWarning = `Field extraction LLM error: ${fieldResult.reason}`;
+  } else {
     try {
       let json = fieldResult.value.trim()
         .replace(/^```(?:json)?\s*/i, "")
         .replace(/\s*```$/i, "");
+      // Handle truncated JSON: attempt to close it so parse works partially
+      if (!json.endsWith("}")) {
+        const lastComma = json.lastIndexOf(",");
+        if (lastComma > 0) json = json.substring(0, lastComma) + "\n}";
+        else json += "\n}";
+      }
       extracted = JSON.parse(json);
-    } catch {
-      // Partial failure — return raw preview so user can fill manually
+    } catch (err: any) {
+      fieldWarning = `Could not parse field extraction response: ${err.message}. Try uploading one file at a time if the issue persists.`;
     }
   }
 
   // ── Step 5: Parse chain extraction result ─────────────────────────────────
   let chainEntries: any[] = [];
-  if (chainResult.status === "fulfilled") {
+  let chainWarning: string | undefined;
+
+  if (chainResult.status === "rejected") {
+    chainWarning = `Chain extraction LLM error: ${chainResult.reason}`;
+  } else {
     try {
       let json = chainResult.value.trim()
         .replace(/^```(?:json)?\s*/i, "")
@@ -272,10 +294,16 @@ export async function POST(request: NextRequest) {
           return a.year - b.year;
         });
       }
-    } catch {
-      // chain parsing failed — return empty
+    } catch (err: any) {
+      chainWarning = `Could not parse chain extraction response: ${err.message}`;
     }
   }
+
+  const warnings = [
+    ...fileErrors,
+    ...(fieldWarning ? [fieldWarning] : []),
+    ...(chainWarning ? [chainWarning] : []),
+  ];
 
   return NextResponse.json({
     success: true,
@@ -283,6 +311,6 @@ export async function POST(request: NextRequest) {
     chainEntries,
     fileCount: fileTexts.length,
     documentTypes: extracted.documentTypes || null,
-    errors: fileErrors.length > 0 ? fileErrors : undefined,
+    errors: warnings.length > 0 ? warnings : undefined,
   });
 }

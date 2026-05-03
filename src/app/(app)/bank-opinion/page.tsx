@@ -279,14 +279,70 @@ export default function BankOpinionPage() {
     }
   };
 
-  // Unified upload handler — extracts fields AND chain from ALL uploaded files
-  // in a single API round-trip (two parallel LLM calls server-side).
+  /** Apply a field-extraction result object into the form state */
+  const applyExtracted = (x: Record<string, any>, prevChain: OwnershipEntry[]) => {
+    const addrParts = [
+      x.propertyAddress,
+      x.surveyNumber ? `Survey No. ${x.surveyNumber}` : null,
+      x.village,
+      x.taluk ? `${x.taluk} Taluk` : null,
+      x.district ? `${x.district} District` : null,
+      x.totalExtent ? `Extent: ${x.totalExtent}` : null,
+    ].filter(Boolean);
+    const propertyAddr = addrParts.join(", ");
+
+    setForm((prev) => ({
+      ...prev,
+      borrowerName:      x.ownerName          || prev.borrowerName,
+      loanAmount:        x.loanAmount ? String(x.loanAmount) : prev.loanAmount,
+      propertyAddress:   propertyAddr          || prev.propertyAddress,
+      propertySchedule:  x.propertySchedule   || propertyAddr || prev.propertySchedule,
+      bankName:          x.bankName            || prev.bankName,
+      branchName:        x.branchName          || prev.branchName,
+      documentsExamined: prev.documentsExamined && x.documentsExamined
+        ? `${prev.documentsExamined}\n${x.documentsExamined}`
+        : x.documentsExamined || prev.documentsExamined,
+      ecPeriodFrom:      x.ecPeriodFrom        || prev.ecPeriodFrom,
+      ecPeriodTo:        x.ecPeriodTo          || prev.ecPeriodTo,
+      legalHeirs:        x.legalHeirs          || prev.legalHeirs,
+      governmentDues:    x.governmentDues      || prev.governmentDues,
+      litigation:        x.litigation          || prev.litigation,
+      encumbrances:      x.encumbrances        || prev.encumbrances,
+      marketability:     x.marketability       || prev.marketability,
+    }));
+
+    return x.bankName as string | undefined;
+  };
+
+  /** Merge chain entries and update state */
+  const applyChain = (
+    newEntries: OwnershipEntry[],
+    prevEntries: OwnershipEntry[],
+    fallbackNarrative?: string
+  ) => {
+    if (newEntries.length) {
+      const merged = dedupeAndSort(newEntries, prevEntries);
+      setChainEntries(merged);
+      setForm((prev) => ({ ...prev, chainOfTitle: buildChainNarrative(merged) }));
+      return merged;
+    } else if (fallbackNarrative) {
+      setForm((prev) => ({ ...prev, chainOfTitle: fallbackNarrative || prev.chainOfTitle }));
+    }
+    return prevEntries;
+  };
+
+  // Unified upload handler — extracts fields AND chain from ALL uploaded files.
+  // Strategy:
+  //   1. Try /extract-all (combined, two parallel LLM calls).
+  //   2. If the combined call returns empty fields (LLM failed / truncated),
+  //      fall back to /extract-document for each file individually and merge.
   const handleUnifiedUpload = async (files: FileList) => {
     if (files.length === 0) return;
     const fileArray = Array.from(files);
     setUploading(true);
 
     try {
+      // ── Attempt 1: combined extract-all ─────────────────────────────────
       const fd = new FormData();
       for (const f of fileArray) fd.append("files", f);
 
@@ -299,61 +355,68 @@ export default function BankOpinionPage() {
       }
 
       if (data.errors?.length) {
-        toast.warning(`Some files skipped: ${data.errors.join("; ")}`);
+        for (const msg of data.errors as string[]) {
+          toast.warning(msg, { duration: 8000 });
+        }
       }
 
-      // ── Apply extracted fields (first non-empty value wins vs existing state) ──
-      const x = data.extracted ?? {};
-      const addrParts = [
-        x.propertyAddress,
-        x.surveyNumber ? `Survey No. ${x.surveyNumber}` : null,
-        x.village,
-        x.taluk ? `${x.taluk} Taluk` : null,
-        x.district ? `${x.district} District` : null,
-        x.totalExtent ? `Extent: ${x.totalExtent}` : null,
-      ].filter(Boolean);
-      const propertyAddr = addrParts.join(", ");
-      const detectedBank = x.bankName || "";
+      const x: Record<string, any> = data.extracted ?? {};
+      const hasFields = Object.values(x).some((v) => v !== null && v !== "" && v !== undefined);
 
-      setForm((prev) => ({
-        ...prev,
-        borrowerName:      x.ownerName          || prev.borrowerName,
-        loanAmount:        x.loanAmount ? String(x.loanAmount) : prev.loanAmount,
-        propertyAddress:   propertyAddr          || prev.propertyAddress,
-        propertySchedule:  x.propertySchedule   || propertyAddr || prev.propertySchedule,
-        bankName:          x.bankName            || prev.bankName,
-        branchName:        x.branchName          || prev.branchName,
-        // Accumulate documentsExamined across batches
-        documentsExamined: prev.documentsExamined && x.documentsExamined
-          ? `${prev.documentsExamined}\n${x.documentsExamined}`
-          : x.documentsExamined || prev.documentsExamined,
-        ecPeriodFrom:      x.ecPeriodFrom        || prev.ecPeriodFrom,
-        ecPeriodTo:        x.ecPeriodTo          || prev.ecPeriodTo,
-        legalHeirs:        x.legalHeirs          || prev.legalHeirs,
-        governmentDues:    x.governmentDues      || prev.governmentDues,
-        litigation:        x.litigation          || prev.litigation,
-        encumbrances:      x.encumbrances        || prev.encumbrances,
-        marketability:     x.marketability       || prev.marketability,
-      }));
-
-      // ── Merge chain entries from this batch with previously traced entries ──
-      if (data.chainEntries?.length) {
-        const merged = dedupeAndSort(data.chainEntries, chainEntries);
-        setChainEntries(merged);
-        setForm((prev) => ({ ...prev, chainOfTitle: buildChainNarrative(merged) }));
-      } else if (x.chainOfTitle) {
-        setForm((prev) => ({ ...prev, chainOfTitle: x.chainOfTitle || prev.chainOfTitle }));
+      if (hasFields) {
+        // Combined call succeeded — apply results
+        const detectedBank = applyExtracted(x, chainEntries);
+        const newChain = applyChain(data.chainEntries ?? [], chainEntries, x.chainOfTitle);
+        setDocExtracted(true);
+        setUploadedFiles((prev) => [...prev, ...fileArray.map((f) => f.name)]);
+        const label = data.documentTypes || (data.fileCount > 1 ? `${data.fileCount} documents` : "Document");
+        toast.success(`${label} read — fields and chain updated`);
+        if (detectedBank && !bankFormatFetchedRef.current) fetchBankFormat(detectedBank);
+        return;
       }
 
-      setDocExtracted(true);
-      setUploadedFiles((prev) => [...prev, ...fileArray.map((f) => f.name)]);
+      // ── Attempt 2: per-file fallback via /extract-document ──────────────
+      // Combined call returned nothing (LLM truncated/failed). Process each
+      // file individually — this uses the same code path as single-file upload.
+      toast.info("Switching to per-file extraction…");
+      let allChain: OwnershipEntry[] = [...chainEntries];
+      let anySuccess = false;
 
-      const label = data.documentTypes || (data.fileCount > 1 ? `${data.fileCount} documents` : "Document");
-      toast.success(`${label} read — fields and chain updated`);
+      for (const file of fileArray) {
+        const singleFd = new FormData();
+        singleFd.append("file", file);
+        try {
+          const sRes = await fetch("/api/bank-opinions/extract-document", {
+            method: "POST",
+            body: singleFd,
+          });
+          const sData = await sRes.json();
+          if (!sRes.ok || !sData.success) continue;
 
-      // Auto-fetch bank format when bank name first detected
-      if (detectedBank && !bankFormatFetchedRef.current) {
-        fetchBankFormat(detectedBank);
+          const sx: Record<string, any> = sData.extracted ?? {};
+          if (Object.values(sx).some((v) => v !== null && v !== "")) {
+            applyExtracted(sx, allChain);
+            // Merge chainEntries from this file
+            if (Array.isArray(sx.chainEntries) && sx.chainEntries.length) {
+              allChain = dedupeAndSort(sx.chainEntries, allChain);
+            }
+            anySuccess = true;
+          }
+        } catch { /* skip this file */ }
+      }
+
+      if (allChain.length) {
+        setChainEntries(allChain);
+        setForm((prev) => ({ ...prev, chainOfTitle: buildChainNarrative(allChain) }));
+      }
+
+      if (anySuccess) {
+        setDocExtracted(true);
+        setUploadedFiles((prev) => [...prev, ...fileArray.map((f) => f.name)]);
+        toast.success(`${fileArray.length} document(s) processed individually — fields updated`);
+      } else {
+        toast.warning("AI could not extract data from these documents. Please fill in the details manually.");
+        setUploadedFiles((prev) => [...prev, ...fileArray.map((f) => f.name)]);
       }
     } catch {
       toast.error("Could not process documents. Please fill in the details manually.");
